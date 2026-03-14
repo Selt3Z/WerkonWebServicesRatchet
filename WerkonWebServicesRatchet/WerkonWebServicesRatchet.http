@@ -1,0 +1,22 @@
+@WerkonWebServicesRatchet_HostAddress = http://localhost:5277
+
+GET {{WerkonWebServicesRatchet_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/clients
+Accept: application/json
+
+###
+
+POST {{WerkonWebServicesRatchet_HostAddress}}/api/clients
+Content-Type: application/json
+
+{
+  "fullName": "Иван Петров",
+  "phoneNumber": "+79990001123",
+  "notes": "Постоянный клиент"
+}
+
+###

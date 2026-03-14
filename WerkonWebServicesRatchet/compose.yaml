@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: ratchet_postgres
+    environment:
+      POSTGRES_DB: ratchet_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ratchet_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  ratchet_postgres_data:
