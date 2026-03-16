@@ -1,10 +1,5 @@
 @WerkonWebServicesRatchet_HostAddress = http://localhost:5277
 
-GET {{WerkonWebServicesRatchet_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
-
 GET {{WerkonWebServicesRatchet_HostAddress}}/api/clients
 Accept: application/json
 
@@ -14,9 +9,73 @@ POST {{WerkonWebServicesRatchet_HostAddress}}/api/clients
 Content-Type: application/json
 
 {
-  "fullName": "Иван Петров",
-  "phoneNumber": "+79990001123",
-  "notes": "Постоянный клиент"
+  "fullName": "Алексей Иванов",
+  "phoneNumber": "+79990301223",
+  "notes": "Не очень постоянный клиент"
 }
 
 ###
+POST {{WerkonWebServicesRatchet_HostAddress}}/api/clients/60daedb1-5888-48c5-8eef-39c9997971d7/vehicles
+Content-Type: application/json
+
+{
+  "brand": "Toyota",
+  "model": "Corolla",
+  "year": 2010,
+  "licensePlate": "A123BC777",
+  "vin": "JTDBU4EE9A9123456"
+}
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/clients/60daedb1-5888-48c5-8eef-39c9997971d7/vehicles
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles/92b6e041-a2dc-4877-a866-c8edb5511612
+Accept: application/json
+
+###
+POST {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles/92b6e041-a2dc-4877-a866-c8edb5511612/visits
+Content-Type: application/json
+
+{
+  "visitedAtUtc": "2026-03-15T12:00:00Z",
+  "mileageAtVisit": 186500,
+  "customerComplaint": "Замена масла и фильтра",
+  "mechanicComment": "Проверить состояние передних колодок"
+}
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles/92b6e041-a2dc-4877-a866-c8edb5511612/visits
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/visits/8467cce9-b03c-4aa5-9e39-168cceaf3bf1
+Accept: application/json
+
+###
+POST {{WerkonWebServicesRatchet_HostAddress}}/api/visits/8467cce9-b03c-4aa5-9e39-168cceaf3bf1/service-items
+Content-Type: application/json
+
+{
+  "name": "Замена масла",
+  "quantity": 1,
+  "unitPrice": 2500,
+  "comment": "Масло 5W-30"
+}
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/visits/8467cce9-b03c-4aa5-9e39-168cceaf3bf1/service-items
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/visits/8467cce9-b03c-4aa5-9e39-168cceaf3bf1/details
+Accept: application/json
+
+###
+PATCH {{WerkonWebServicesRatchet_HostAddress}}/api/visits/8467cce9-b03c-4aa5-9e39-168cceaf3bf1/status
+Content-Type: application/json
+
+{
+  "status": 3
+}

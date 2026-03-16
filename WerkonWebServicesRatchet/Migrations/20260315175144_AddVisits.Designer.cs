@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260315175144_AddVisits")]
+    partial class AddVisits
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -119,38 +122,6 @@ namespace WerkonWebServicesRatchet.Migrations
                     b.ToTable("Visits");
                 });
 
-            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.VisitServiceItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Comment")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("Quantity")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric");
-
-                    b.Property<Guid>("VisitId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("VisitId");
-
-                    b.ToTable("VisitServiceItems", (string)null);
-                });
-
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Vehicle", b =>
                 {
                     b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Client", "Client")
@@ -173,17 +144,6 @@ namespace WerkonWebServicesRatchet.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.VisitServiceItem", b =>
-                {
-                    b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Visit", "Visit")
-                        .WithMany("ServiceItems")
-                        .HasForeignKey("VisitId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Visit");
-                });
-
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Client", b =>
                 {
                     b.Navigation("Vehicles");
@@ -192,11 +152,6 @@ namespace WerkonWebServicesRatchet.Migrations
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Vehicle", b =>
                 {
                     b.Navigation("Visits");
-                });
-
-            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Visit", b =>
-                {
-                    b.Navigation("ServiceItems");
                 });
 #pragma warning restore 612, 618
         }

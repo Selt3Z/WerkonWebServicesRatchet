@@ -10,4 +10,12 @@ public sealed class AppDbContext : DbContext
     }
 
     public DbSet<Client> Clients => Set<Client>();
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<Visit> Visits => Set<Visit>();
+    public DbSet<VisitServiceItem> VisitServiceItems => Set<VisitServiceItem>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<VisitServiceItem>().ToTable("VisitServiceItems");
+    }
 }

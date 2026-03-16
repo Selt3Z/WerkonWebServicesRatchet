@@ -7,4 +7,5 @@ public sealed class Client
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+    public List<Vehicle> Vehicles { get; set; } = [];
 }
