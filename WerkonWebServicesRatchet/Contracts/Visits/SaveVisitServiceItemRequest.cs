@@ -1,6 +1,6 @@
 ﻿namespace WerkonWebServicesRatchet.Contracts.Visits;
 
-public sealed class CreateVisitServiceItemRequest
+public sealed class SaveVisitServiceItemRequest
 {
     public string Name { get; set; } = string.Empty;
     public decimal Quantity { get; set; }

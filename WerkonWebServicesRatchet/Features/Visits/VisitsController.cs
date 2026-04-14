@@ -80,7 +80,7 @@ public sealed class VisitsController : ControllerBase
     [HttpPost("api/vehicles/{vehicleId:guid}/visits")]
     public async Task<ActionResult<VisitResponse>> Create(
         Guid vehicleId,
-        CreateVisitRequest request,
+        SaveVisitRequest request,
         CancellationToken cancellationToken)
     {
         var vehicleExists = await _dbContext.Vehicles

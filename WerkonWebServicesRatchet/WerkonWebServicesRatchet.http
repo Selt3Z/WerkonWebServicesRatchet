@@ -79,3 +79,52 @@ Content-Type: application/json
 {
   "status": 3
 }
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/clients?phoneNumber=+79990301223
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/clients?name=иванов
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles?licensePlate=A123
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles?vin=JTDBU
+Accept: application/json
+
+###
+DELETE {{WerkonWebServicesRatchet_HostAddress}}/api/visits/СЮДА_GUID_ВИЗИТА/service-items/СЮДА_GUID_РАБОТЫ
+
+###
+PUT {{WerkonWebServicesRatchet_HostAddress}}/api/clients/СЮДА_GUID_КЛИЕНТА
+Content-Type: application/json
+
+{
+  "fullName": "Иван Петров Обновлённый",
+  "phoneNumber": "+79990002233",
+  "notes": "Постоянный клиент, звонить заранее"
+}
+
+###
+PUT {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles/СЮДА_GUID_МАШИНЫ
+Content-Type: application/json
+
+{
+  "brand": "Toyota",
+  "model": "Corolla Restyled",
+  "year": 2011,
+  "licensePlate": "A123BC777",
+  "vin": "JTDBU4EE9A9123456"
+}
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/clients/СЮДА_GUID_КЛИЕНТА/details
+Accept: application/json
+
+###
+GET {{WerkonWebServicesRatchet_HostAddress}}/api/vehicles/СЮДА_GUID_МАШИНЫ/details
+Accept: application/json

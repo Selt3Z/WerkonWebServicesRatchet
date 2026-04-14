@@ -1,6 +1,6 @@
 ﻿namespace WerkonWebServicesRatchet.Contracts.Visits;
 
-public sealed class CreateVisitRequest
+public sealed class SaveVisitRequest
 {
     public DateTime VisitedAtUtc { get; set; }
     public int? MileageAtVisit { get; set; }

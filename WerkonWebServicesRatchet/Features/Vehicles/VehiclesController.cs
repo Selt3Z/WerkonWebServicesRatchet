@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using WerkonWebServicesRatchet.Contracts.Clients;
 using WerkonWebServicesRatchet.Contracts.Vehicles;
+using WerkonWebServicesRatchet.Contracts.Visits;
 using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
 
@@ -14,6 +16,44 @@ public sealed class VehiclesController : ControllerBase
     public VehiclesController(AppDbContext dbContext)
     {
         _dbContext = dbContext;
+    }
+
+    [HttpGet("api/vehicles")]
+    public async Task<ActionResult<List<VehicleResponse>>> Search(
+    [FromQuery] string? licensePlate,
+    [FromQuery] string? vin,
+    CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Vehicles.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(licensePlate))
+        {
+            var normalizedLicensePlate = licensePlate.Trim().ToLower();
+            query = query.Where(x => x.LicensePlate.ToLower().Contains(normalizedLicensePlate));
+        }
+
+        if (!string.IsNullOrWhiteSpace(vin))
+        {
+            var normalizedVin = vin.Trim().ToLower();
+            query = query.Where(x => x.Vin != null && x.Vin.ToLower().Contains(normalizedVin));
+        }
+
+        var response = await query
+            .OrderBy(x => x.CreatedAtUtc)
+            .Select(x => new VehicleResponse
+            {
+                Id = x.Id,
+                ClientId = x.ClientId,
+                Brand = x.Brand,
+                Model = x.Model,
+                Year = x.Year,
+                LicensePlate = x.LicensePlate,
+                Vin = x.Vin,
+                CreatedAtUtc = x.CreatedAtUtc
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(response);
     }
 
     [HttpGet("api/clients/{clientId:guid}/vehicles")]
@@ -79,7 +119,7 @@ public sealed class VehiclesController : ControllerBase
     [HttpPost("api/clients/{clientId:guid}/vehicles")]
     public async Task<ActionResult<VehicleResponse>> Create(
         Guid clientId,
-        CreateVehicleRequest request,
+        SaveVehicleRequest request,
         CancellationToken cancellationToken)
     {
         var clientExists = await _dbContext.Clients
@@ -138,5 +178,101 @@ public sealed class VehiclesController : ControllerBase
         };
 
         return CreatedAtAction(nameof(GetById), new { id = vehicle.Id }, response);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<ClientResponse>> Update(
+    Guid id,
+    SaveClientRequest request,
+    CancellationToken cancellationToken)
+    {
+        var client = await _dbContext.Clients
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            ModelState.AddModelError(nameof(request.FullName), "Full name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            ModelState.AddModelError(nameof(request.PhoneNumber), "Phone number is required.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        client.FullName = request.FullName.Trim();
+        client.PhoneNumber = request.PhoneNumber.Trim();
+        client.Notes = string.IsNullOrWhiteSpace(request.Notes)
+            ? null
+            : request.Notes.Trim();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var response = new ClientResponse
+        {
+            Id = client.Id,
+            FullName = client.FullName,
+            PhoneNumber = client.PhoneNumber,
+            Notes = client.Notes,
+            CreatedAtUtc = client.CreatedAtUtc
+        };
+
+        return Ok(response);
+    }
+
+    [HttpGet("api/vehicles/{id:guid}/details")]
+    public async Task<ActionResult<VehicleDetailsResponse>> GetDetails(
+    Guid id,
+    CancellationToken cancellationToken)
+    {
+        var vehicle = await _dbContext.Vehicles
+            .Include(x => x.Client)
+            .Include(x => x.Visits)
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (vehicle is null)
+        {
+            return NotFound();
+        }
+
+        var response = new VehicleDetailsResponse
+        {
+            Id = vehicle.Id,
+            ClientId = vehicle.ClientId,
+            ClientFullName = vehicle.Client.FullName,
+            ClientPhoneNumber = vehicle.Client.PhoneNumber,
+            Brand = vehicle.Brand,
+            Model = vehicle.Model,
+            Year = vehicle.Year,
+            LicensePlate = vehicle.LicensePlate,
+            Vin = vehicle.Vin,
+            CreatedAtUtc = vehicle.CreatedAtUtc,
+            Visits = vehicle.Visits
+                .OrderByDescending(x => x.VisitedAtUtc)
+                .ThenByDescending(x => x.CreatedAtUtc)
+                .Select(x => new VisitResponse
+                {
+                    Id = x.Id,
+                    VehicleId = x.VehicleId,
+                    VisitedAtUtc = x.VisitedAtUtc,
+                    MileageAtVisit = x.MileageAtVisit,
+                    CustomerComplaint = x.CustomerComplaint,
+                    MechanicComment = x.MechanicComment,
+                    Status = x.Status,
+                    CreatedAtUtc = x.CreatedAtUtc
+                })
+                .ToList()
+        };
+
+        return Ok(response);
     }
 }

@@ -51,7 +51,7 @@ public sealed class VisitServiceItemsController : ControllerBase
     [HttpPost("api/visits/{visitId:guid}/service-items")]
     public async Task<ActionResult<VisitServiceItemResponse>> Create(
         Guid visitId,
-        CreateVisitServiceItemRequest request,
+        SaveVisitServiceItemRequest request,
         CancellationToken cancellationToken)
     {
         var visitExists = await _dbContext.Visits
@@ -109,5 +109,27 @@ public sealed class VisitServiceItemsController : ControllerBase
         };
 
         return Ok(response);
+    }
+
+    [HttpDelete("api/visits/{visitId:guid}/service-items/{itemId:guid}")]
+    public async Task<IActionResult> Delete(
+    Guid visitId,
+    Guid itemId,
+    CancellationToken cancellationToken)
+    {
+        var item = await _dbContext.VisitServiceItems
+            .SingleOrDefaultAsync(
+                x => x.Id == itemId && x.VisitId == visitId,
+                cancellationToken);
+
+        if (item is null)
+        {
+            return NotFound();
+        }
+
+        _dbContext.VisitServiceItems.Remove(item);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
     }
 }

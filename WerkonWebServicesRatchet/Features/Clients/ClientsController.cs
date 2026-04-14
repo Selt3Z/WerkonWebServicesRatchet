@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Clients;
+using WerkonWebServicesRatchet.Contracts.Vehicles;
 using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
 
@@ -18,10 +19,27 @@ public sealed class ClientsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<ClientResponse>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<List<ClientResponse>>> GetAll(
+        [FromQuery] string? name,
+        [FromQuery] string? phone,
+        CancellationToken cancellationToken)
     {
-        var response = await _dbContext.Clients
-            .OrderByDescending(x => x.CreatedAtUtc)
+        var query = _dbContext.Clients.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var normalizedName = name.Trim().ToLower();
+            query = query.Where(x => x.FullName.ToLower().Contains(normalizedName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(phone))
+        {
+            var normalizedPhone = phone.Trim().ToLower();
+            query = query.Where(x => x.PhoneNumber.ToLower().Contains(normalizedPhone));
+        }
+
+        var response = await query
+            .OrderBy(x => x.CreatedAtUtc)
             .Select(x => new ClientResponse
             {
                 Id = x.Id,
@@ -60,7 +78,7 @@ public sealed class ClientsController : ControllerBase
 
     [HttpPost]
     public async Task<ActionResult<ClientResponse>> Create(
-        CreateClientRequest request,
+        SaveClientRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.FullName))
@@ -100,5 +118,94 @@ public sealed class ClientsController : ControllerBase
         };
 
         return CreatedAtAction(nameof(GetById), new { id = client.Id }, response);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<ClientResponse>> Update(
+    Guid id,
+    SaveClientRequest request,
+    CancellationToken cancellationToken)
+    {
+        var client = await _dbContext.Clients
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            ModelState.AddModelError(nameof(request.FullName), "Full name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            ModelState.AddModelError(nameof(request.PhoneNumber), "Phone number is required.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        client.FullName = request.FullName.Trim();
+        client.PhoneNumber = request.PhoneNumber.Trim();
+        client.Notes = string.IsNullOrWhiteSpace(request.Notes)
+            ? null
+            : request.Notes.Trim();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var response = new ClientResponse
+        {
+            Id = client.Id,
+            FullName = client.FullName,
+            PhoneNumber = client.PhoneNumber,
+            Notes = client.Notes,
+            CreatedAtUtc = client.CreatedAtUtc
+        };
+
+        return Ok(response);
+    }
+
+    [HttpGet("{id:guid}/details")]
+    public async Task<ActionResult<ClientDetailsResponse>> GetDetails(
+    Guid id,
+    CancellationToken cancellationToken)
+    {
+        var client = await _dbContext.Clients
+            .Include(x => x.Vehicles)
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        var response = new ClientDetailsResponse
+        {
+            Id = client.Id,
+            FullName = client.FullName,
+            PhoneNumber = client.PhoneNumber,
+            Notes = client.Notes,
+            CreatedAtUtc = client.CreatedAtUtc,
+            Vehicles = client.Vehicles
+                .OrderBy(x => x.CreatedAtUtc)
+                .Select(x => new VehicleResponse
+                {
+                    Id = x.Id,
+                    ClientId = x.ClientId,
+                    Brand = x.Brand,
+                    Model = x.Model,
+                    Year = x.Year,
+                    LicensePlate = x.LicensePlate,
+                    Vin = x.Vin,
+                    CreatedAtUtc = x.CreatedAtUtc
+                })
+                .ToList()
+        };
+
+        return Ok(response);
     }
 }
