@@ -1,0 +1,180 @@
+﻿@page "/clients/{ClientId:guid}/vehicles/new"
+@page "/vehicles/{Id:guid}/edit"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? "Edit Vehicle" : "New Vehicle")</PageTitle>
+
+<h1>@(IsEditMode ? "Edit Vehicle" : "New Vehicle")</h1>
+
+@if (IsLoading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="Model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="mb-3">
+            <label class="form-label">Brand</label>
+            <InputText class="form-control" @bind-Value="Model.Brand" />
+            <ValidationMessage For="() => Model.Brand" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Model</label>
+            <InputText class="form-control" @bind-Value="Model.Model" />
+            <ValidationMessage For="() => Model.Model" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Year</label>
+            <InputNumber class="form-control" @bind-Value="Model.Year" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">License plate</label>
+            <InputText class="form-control" @bind-Value="Model.LicensePlate" />
+            <ValidationMessage For="() => Model.LicensePlate" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">VIN</label>
+            <InputText class="form-control" @bind-Value="Model.Vin" />
+        </div>
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? "Saving..." : "Save")
+        </button>
+
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">
+            Cancel
+        </button>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? ClientId { get; set; }
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private VehicleSaveModel Model { get; set; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsSaving { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    private bool IsEditMode => Id.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ErrorMessage = null;
+
+        if (!IsEditMode)
+        {
+            Model = new VehicleSaveModel();
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+
+            var vehicle = await ApiClient.GetVehicleAsync(Id.Value);
+
+            if (vehicle is null)
+            {
+                ErrorMessage = "Vehicle not found.";
+                return;
+            }
+
+            ClientId = vehicle.ClientId;
+
+            Model = new VehicleSaveModel
+            {
+                Brand = vehicle.Brand,
+                Model = vehicle.Model,
+                Year = vehicle.Year,
+                LicensePlate = vehicle.LicensePlate,
+                Vin = vehicle.Vin
+            };
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+
+            VehicleListItem? savedVehicle;
+
+            if (IsEditMode)
+            {
+                savedVehicle = await ApiClient.UpdateVehicleAsync(Id!.Value, Model);
+            }
+            else
+            {
+                if (!ClientId.HasValue)
+                {
+                    ErrorMessage = "ClientId is required to create a vehicle.";
+                    return;
+                }
+
+                savedVehicle = await ApiClient.CreateVehicleAsync(ClientId.Value, Model);
+            }
+
+            if (savedVehicle is null)
+            {
+                ErrorMessage = "Failed to save vehicle.";
+                return;
+            }
+
+            NavigationManager.NavigateTo($"/vehicles/{savedVehicle.Id}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        if (IsEditMode && Id.HasValue)
+        {
+            NavigationManager.NavigateTo($"/vehicles/{Id.Value}");
+            return;
+        }
+
+        if (ClientId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/clients/{ClientId.Value}");
+            return;
+        }
+
+        NavigationManager.NavigateTo("/clients");
+    }
+}

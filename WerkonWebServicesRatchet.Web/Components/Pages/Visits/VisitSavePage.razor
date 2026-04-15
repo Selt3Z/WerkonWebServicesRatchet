@@ -1,0 +1,181 @@
+﻿@page "/vehicles/{VehicleId:guid}/visits/new"
+@page "/visits/{Id:guid}/edit"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? "Edit Visit" : "New Visit")</PageTitle>
+
+<h1>@(IsEditMode ? "Edit Visit" : "New Visit")</h1>
+
+@if (IsLoading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="Model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">Visit date and time</label>
+            <div class="mb-3">
+                <label class="form-label">Visit date and time</label>
+                <input class="form-control"
+                       type="datetime-local"
+                       @bind="Model.VisitedAtLocal"
+                       @bind:format="yyyy-MM-ddTHH:mm" />
+                <ValidationMessage For="() => Model.VisitedAtLocal" />
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Mileage</label>
+            <InputNumber class="form-control" @bind-Value="Model.MileageAtVisit" />
+            <ValidationMessage For="() => Model.MileageAtVisit" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Customer complaint</label>
+            <InputTextArea class="form-control" @bind-Value="Model.CustomerComplaint" />
+            <ValidationMessage For="() => Model.CustomerComplaint" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Mechanic comment</label>
+            <InputTextArea class="form-control" @bind-Value="Model.MechanicComment" />
+        </div>
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? "Saving..." : "Save")
+        </button>
+
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">
+            Cancel
+        </button>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? VehicleId { get; set; }
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private VisitSaveModel Model { get; set; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsSaving { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    private bool IsEditMode => Id.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ErrorMessage = null;
+
+        if (!IsEditMode)
+        {
+            Model = new VisitSaveModel();
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+
+            var visit = await ApiClient.GetVisitAsync(Id.Value);
+
+            if (visit is null)
+            {
+                ErrorMessage = "Visit not found.";
+                return;
+            }
+
+            VehicleId = visit.VehicleId;
+
+            Model = new VisitSaveModel
+            {
+                VisitedAtLocal = visit.VisitedAtUtc.ToLocalTime(),
+                MileageAtVisit = visit.MileageAtVisit,
+                CustomerComplaint = visit.CustomerComplaint,
+                MechanicComment = visit.MechanicComment
+            };
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+
+            VisitListItem? savedVisit;
+
+            if (IsEditMode)
+            {
+                savedVisit = await ApiClient.UpdateVisitAsync(Id!.Value, Model);
+            }
+            else
+            {
+                if (!VehicleId.HasValue)
+                {
+                    ErrorMessage = "VehicleId is required to create a visit.";
+                    return;
+                }
+
+                savedVisit = await ApiClient.CreateVisitAsync(VehicleId.Value, Model);
+            }
+
+            if (savedVisit is null)
+            {
+                ErrorMessage = "Failed to save visit.";
+                return;
+            }
+
+            NavigationManager.NavigateTo($"/visits/{savedVisit.Id}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        if (IsEditMode && Id.HasValue)
+        {
+            NavigationManager.NavigateTo($"/visits/{Id.Value}");
+            return;
+        }
+
+        if (VehicleId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/vehicles/{VehicleId.Value}");
+            return;
+        }
+
+        NavigationManager.NavigateTo("/clients");
+    }
+}

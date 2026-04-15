@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="WerkonWebServicesRatchet.Web/WerkonWebServicesRatchet.Web.csproj" Id="090906ac-0cbe-4f63-9087-c6d3e6b23de1" />
   <Project Path="WerkonWebServicesRatchet/WerkonWebServicesRatchet.csproj" />
 </Solution>

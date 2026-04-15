@@ -1,0 +1,130 @@
+﻿@page "/clients/{Id:guid}"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>Client Details</PageTitle>
+
+<h1>Client Details</h1>
+
+@if (IsLoading)
+{
+    <p>Loading...</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Client is null)
+{
+    <p>Client not found.</p>
+}
+else
+{
+    <div class="mb-4">
+        <h3>@Client.FullName</h3>
+        <p><strong>Phone:</strong> @Client.PhoneNumber</p>
+        <p><strong>Notes:</strong> @Client.Notes</p>
+
+        <button class="btn btn-primary" @onclick="EditClient">Edit client</button>
+        <button class="btn btn-success" @onclick="AddVehicle">Add vehicle</button>
+    </div>
+
+    <h4>Vehicles</h4>
+
+    @if (Client.Vehicles.Count == 0)
+    {
+        <p>No vehicles yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Brand</th>
+                    <th>Model</th>
+                    <th>Year</th>
+                    <th>License plate</th>
+                    <th>VIN</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var vehicle in Client.Vehicles)
+                {
+                    <tr>
+                        <td>@vehicle.Brand</td>
+                        <td>@vehicle.Model</td>
+                        <td>@vehicle.Year</td>
+                        <td>@vehicle.LicensePlate</td>
+                        <td>@vehicle.Vin</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OpenVehicle(vehicle.Id)">
+                                Open
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <button class="btn btn-secondary" @onclick="BackToClients">
+        Back to clients
+    </button>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private ClientDetailsModel? Client { get; set; }
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadClientAsync();
+    }
+
+    private async Task LoadClientAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            Client = await ApiClient.GetClientDetailsAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OpenVehicle(Guid vehicleId)
+    {
+        NavigationManager.NavigateTo($"/vehicles/{vehicleId}");
+    }
+
+    private void BackToClients()
+    {
+        NavigationManager.NavigateTo("/clients");
+    }
+
+    private void EditClient()
+    {
+        NavigationManager.NavigateTo($"/clients/{Id}/edit");
+    }
+    private void AddVehicle()
+    {
+        NavigationManager.NavigateTo($"/clients/{Id}/vehicles/new");
+    }
+}

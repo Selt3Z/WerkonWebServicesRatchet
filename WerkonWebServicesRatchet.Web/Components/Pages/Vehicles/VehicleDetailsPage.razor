@@ -1,0 +1,161 @@
+﻿@page "/vehicles/{Id:guid}"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>Vehicle Details</PageTitle>
+
+<h1>Vehicle Details</h1>
+
+@if (IsLoading)
+{
+    <p>Loading...</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Vehicle is null)
+{
+    <p>Vehicle not found.</p>
+}
+else
+{
+    <div class="mb-4">
+        <h3>@Vehicle.Brand @Vehicle.Model</h3>
+        <p><strong>Year:</strong> @Vehicle.Year</p>
+        <p><strong>License plate:</strong> @Vehicle.LicensePlate</p>
+        <p><strong>VIN:</strong> @Vehicle.Vin</p>
+
+        <button class="btn btn-primary" @onclick="EditVehicle">Edit vehicle</button>
+        <button class="btn btn-success" @onclick="AddVisit">Add visit</button>
+    </div>
+
+    <div class="mb-4">
+        <h4>Client</h4>
+        <p><strong>Name:</strong> @Vehicle.ClientFullName</p>
+        <p><strong>Phone:</strong> @Vehicle.ClientPhoneNumber</p>
+        <button class="btn btn-sm btn-outline-secondary"
+                @onclick="() => OpenClient(Vehicle.ClientId)">
+            Open client
+        </button>
+    </div>
+
+    <h4>Visits</h4>
+
+    @if (Vehicle.Visits.Count == 0)
+    {
+        <p>No visits yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Mileage</th>
+                    <th>Complaint</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var visit in Vehicle.Visits)
+                {
+                    <tr>
+                        <td>@visit.VisitedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@visit.MileageAtVisit</td>
+                        <td>@visit.CustomerComplaint</td>
+                        <td>@GetStatusText(visit.Status)</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OpenVisit(visit.Id)">
+                                Open
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <button class="btn btn-secondary" @onclick="BackToClient">
+        Back to client
+    </button>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private VehicleDetailsModel? Vehicle { get; set; }
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadVehicleAsync();
+    }
+
+    private async Task LoadVehicleAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            Vehicle = await ApiClient.GetVehicleDetailsAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OpenClient(Guid clientId)
+    {
+        NavigationManager.NavigateTo($"/clients/{clientId}");
+    }
+
+    private void OpenVisit(Guid visitId)
+    {
+        NavigationManager.NavigateTo($"/visits/{visitId}");
+    }
+
+    private void BackToClient()
+    {
+        if (Vehicle is not null)
+        {
+            NavigationManager.NavigateTo($"/clients/{Vehicle.ClientId}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/clients");
+        }
+    }
+
+    private static string GetStatusText(int status) => status switch
+    {
+        1 => "Created",
+        2 => "In progress",
+        3 => "Completed",
+        4 => "Cancelled",
+        _ => $"Unknown ({status})"
+    };
+
+    private void EditVehicle()
+    {
+        NavigationManager.NavigateTo($"/vehicles/{Id}/edit");
+    }
+
+    private void AddVisit()
+    {
+        NavigationManager.NavigateTo($"/vehicles/{Id}/visits/new");
+    }
+}

@@ -143,6 +143,64 @@ public sealed class VisitsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = visit.Id }, response);
     }
 
+    [HttpPut("api/visits/{id:guid}")]
+    public async Task<ActionResult<VisitResponse>> Update(
+    Guid id,
+    SaveVisitRequest request,
+    CancellationToken cancellationToken)
+    {
+        var visit = await _dbContext.Visits
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (visit is null)
+        {
+            return NotFound();
+        }
+
+        if (request.VisitedAtUtc == default)
+        {
+            ModelState.AddModelError(nameof(request.VisitedAtUtc), "VisitedAtUtc is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CustomerComplaint))
+        {
+            ModelState.AddModelError(nameof(request.CustomerComplaint), "Customer complaint is required.");
+        }
+
+        if (request.MileageAtVisit is < 0)
+        {
+            ModelState.AddModelError(nameof(request.MileageAtVisit), "MileageAtVisit cannot be negative.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        visit.VisitedAtUtc = request.VisitedAtUtc;
+        visit.MileageAtVisit = request.MileageAtVisit;
+        visit.CustomerComplaint = request.CustomerComplaint.Trim();
+        visit.MechanicComment = string.IsNullOrWhiteSpace(request.MechanicComment)
+            ? null
+            : request.MechanicComment.Trim();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var response = new VisitResponse
+        {
+            Id = visit.Id,
+            VehicleId = visit.VehicleId,
+            VisitedAtUtc = visit.VisitedAtUtc,
+            MileageAtVisit = visit.MileageAtVisit,
+            CustomerComplaint = visit.CustomerComplaint,
+            MechanicComment = visit.MechanicComment,
+            Status = visit.Status,
+            CreatedAtUtc = visit.CreatedAtUtc
+        };
+
+        return Ok(response);
+    }
+
     [HttpGet("api/visits/{id:guid}/details")]
     public async Task<ActionResult<VisitDetailsResponse>> GetDetails(
     Guid id,

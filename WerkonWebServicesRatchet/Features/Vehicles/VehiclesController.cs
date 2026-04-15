@@ -9,6 +9,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Vehicles;
 
 [ApiController]
+//[Route("api/[controller]")]
 public sealed class VehiclesController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
@@ -180,28 +181,33 @@ public sealed class VehiclesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = vehicle.Id }, response);
     }
 
-    [HttpPut("{id:guid}")]
-    public async Task<ActionResult<ClientResponse>> Update(
+    [HttpPut("api/vehicles/{id:guid}")]
+    public async Task<ActionResult<VehicleResponse>> Update(
     Guid id,
-    SaveClientRequest request,
+    SaveVehicleRequest request,
     CancellationToken cancellationToken)
     {
-        var client = await _dbContext.Clients
+        var vehicle = await _dbContext.Vehicles
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-        if (client is null)
+        if (vehicle is null)
         {
-            return NotFound();
+            return NotFound($"Vehicle with id {id} wasn't found.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.FullName))
+        if (string.IsNullOrWhiteSpace(request.Brand))
         {
-            ModelState.AddModelError(nameof(request.FullName), "Full name is required.");
+            ModelState.AddModelError(nameof(request.Brand), "Brand is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+        if (string.IsNullOrWhiteSpace(request.Model))
         {
-            ModelState.AddModelError(nameof(request.PhoneNumber), "Phone number is required.");
+            ModelState.AddModelError(nameof(request.Model), "Model is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.LicensePlate))
+        {
+            ModelState.AddModelError(nameof(request.LicensePlate), "License plate is required.");
         }
 
         if (!ModelState.IsValid)
@@ -209,21 +215,26 @@ public sealed class VehiclesController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        client.FullName = request.FullName.Trim();
-        client.PhoneNumber = request.PhoneNumber.Trim();
-        client.Notes = string.IsNullOrWhiteSpace(request.Notes)
+        vehicle.Brand = request.Brand.Trim();
+        vehicle.Model = request.Model.Trim();
+        vehicle.Year = request.Year;
+        vehicle.LicensePlate = request.LicensePlate.Trim();
+        vehicle.Vin = string.IsNullOrWhiteSpace(request.Vin)
             ? null
-            : request.Notes.Trim();
+            : request.Vin.Trim();
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var response = new ClientResponse
+        var response = new VehicleResponse
         {
-            Id = client.Id,
-            FullName = client.FullName,
-            PhoneNumber = client.PhoneNumber,
-            Notes = client.Notes,
-            CreatedAtUtc = client.CreatedAtUtc
+            Id = vehicle.Id,
+            ClientId = vehicle.ClientId,
+            Brand = vehicle.Brand,
+            Model = vehicle.Model,
+            Year = vehicle.Year,
+            LicensePlate = vehicle.LicensePlate,
+            Vin = vehicle.Vin,
+            CreatedAtUtc = vehicle.CreatedAtUtc
         };
 
         return Ok(response);

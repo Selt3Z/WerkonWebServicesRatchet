@@ -1,0 +1,135 @@
+﻿@page "/visits/{Id:guid}"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>Visit Details</PageTitle>
+
+<h1>Visit Details</h1>
+
+@if (IsLoading)
+{
+    <p>Loading...</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Visit is null)
+{
+    <p>Visit not found.</p>
+}
+else
+{
+    <div class="mb-4">
+        <h3>@Visit.VisitedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</h3>
+        <p><strong>Status:</strong> @GetStatusText(Visit.Status)</p>
+        <p><strong>Mileage:</strong> @Visit.MileageAtVisit</p>
+        <p><strong>Customer complaint:</strong> @Visit.CustomerComplaint</p>
+        <p><strong>Mechanic comment:</strong> @Visit.MechanicComment</p>
+
+        <button class="btn btn-primary" @onclick="EditVisit">Edit visit</button>
+    </div>
+
+    <h4>Service items</h4>
+
+    @if (Visit.ServiceItems.Count == 0)
+    {
+        <p>No service items yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Qty</th>
+                    <th>Unit price</th>
+                    <th>Total</th>
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Visit.ServiceItems)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td>@item.Quantity</td>
+                        <td>@item.UnitPrice</td>
+                        <td>@item.TotalPrice</td>
+                        <td>@item.Comment</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="mt-4">
+        <h4>Total amount: @Visit.TotalAmount</h4>
+    </div>
+
+    <button class="btn btn-secondary" @onclick="BackToVehicle">
+        Back to vehicle
+    </button>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private VisitDetailsModel? Visit { get; set; }
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadVisitAsync();
+    }
+
+    private async Task LoadVisitAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            Visit = await ApiClient.GetVisitDetailsAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void BackToVehicle()
+    {
+        if (Visit is not null)
+        {
+            NavigationManager.NavigateTo($"/vehicles/{Visit.VehicleId}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/clients");
+        }
+    }
+
+    private static string GetStatusText(int status) => status switch
+    {
+        1 => "Created",
+        2 => "In progress",
+        3 => "Completed",
+        4 => "Cancelled",
+        _ => $"Unknown ({status})"
+    };
+
+    private void EditVisit()
+    {
+        NavigationManager.NavigateTo($"/visits/{Id}/edit");
+    }
+}
