@@ -1,17 +1,16 @@
-﻿@page "/clients/{Id:guid}"
+@page "/clients/{Id:guid}"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
-@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 
-<PageTitle>Client Details</PageTitle>
+<PageTitle>@L["ClientDetails_Title"]</PageTitle>
 
-<h1>Client Details</h1>
+<h1>@L["ClientDetails_Title"]</h1>
 
 @if (IsLoading)
 {
-    <p>Loading...</p>
+    <p>@L["Loading"]</p>
 }
 else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 {
@@ -19,35 +18,35 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 }
 else if (Client is null)
 {
-    <p>Client not found.</p>
+    <p>@L["Client_NotFound"]</p>
 }
 else
 {
     <div class="mb-4">
         <h3>@Client.FullName</h3>
-        <p><strong>Phone:</strong> @Client.PhoneNumber</p>
-        <p><strong>Notes:</strong> @Client.Notes</p>
+        <p><strong>@L["Phone"]:</strong> @Client.PhoneNumber</p>
+        <p><strong>@L["Notes"]:</strong> @Client.Notes</p>
 
-        <button class="btn btn-primary" @onclick="EditClient">Edit client</button>
-        <button class="btn btn-success" @onclick="AddVehicle">Add vehicle</button>
+        <button class="btn btn-primary" @onclick="EditClient">@L["Client_Edit"]</button>
+        <button class="btn btn-success" @onclick="AddVehicle">@L["Client_AddVehicle"]</button>
     </div>
 
-    <h4>Vehicles</h4>
+    <h4>@L["Vehicles"]</h4>
 
     @if (Client.Vehicles.Count == 0)
     {
-        <p>No vehicles yet.</p>
+        <p>@L["Vehicles_None"]</p>
     }
     else
     {
         <table class="table">
             <thead>
                 <tr>
-                    <th>Brand</th>
-                    <th>Model</th>
-                    <th>Year</th>
-                    <th>License plate</th>
-                    <th>VIN</th>
+                    <th>@L["Brand"]</th>
+                    <th>@L["Model"]</th>
+                    <th>@L["Year"]</th>
+                    <th>@L["LicensePlate"]</th>
+                    <th>@L["Vin"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -63,7 +62,7 @@ else
                         <td>
                             <button class="btn btn-sm btn-outline-primary"
                                     @onclick="() => OpenVehicle(vehicle.Id)">
-                                Open
+                                @L["Open"]
                             </button>
                         </td>
                     </tr>
@@ -73,7 +72,7 @@ else
     }
 
     <button class="btn btn-secondary" @onclick="BackToClients">
-        Back to clients
+        @L["BackToClients"]
     </button>
 }
 
@@ -123,6 +122,7 @@ else
     {
         NavigationManager.NavigateTo($"/clients/{Id}/edit");
     }
+
     private void AddVehicle()
     {
         NavigationManager.NavigateTo($"/clients/{Id}/vehicles/new");

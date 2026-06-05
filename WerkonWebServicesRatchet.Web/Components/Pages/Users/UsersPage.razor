@@ -1,0 +1,132 @@
+@page "/users"
+@using WerkonWebServicesRatchet.Web.Authorization
+@using WerkonWebServicesRatchet.Web.Models
+@attribute [RequireAdministrator]
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>@L["Users_Title"]</PageTitle>
+
+<h1>@L["Users_Title"]</h1>
+
+<div class="mb-3">
+    <button class="btn btn-success" @onclick="OpenNewUser">@L["Users_Add"]</button>
+</div>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Users.Count == 0)
+{
+    <p>@L["Users_NotFound"]</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@L["UserName"]</th>
+                <th>@L["Name"]</th>
+                <th>@L["User_Role"]</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in Users)
+            {
+                <tr>
+                    <td>@user.UserName</td>
+                    <td>@user.DisplayName</td>
+                    <td>@L.GetRoleDisplayName(user.Role)</td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn btn-sm btn-outline-primary me-1"
+                                @onclick="() => EditUser(user.Id)">
+                            @L["Edit"]
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger"
+                                disabled="@IsDeleting"
+                                @onclick="() => DeleteUserAsync(user.Id)">
+                            @L["Delete"]
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<UserListItem> Users { get; set; } = [];
+    private bool IsLoading { get; set; }
+    private bool IsDeleting { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            Users = await ApiClient.GetUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OpenNewUser()
+    {
+        NavigationManager.NavigateTo("/users/new");
+    }
+
+    private void EditUser(Guid userId)
+    {
+        NavigationManager.NavigateTo($"/users/{userId}/edit");
+    }
+
+    private async Task DeleteUserAsync(Guid userId)
+    {
+        try
+        {
+            IsDeleting = true;
+            ErrorMessage = null;
+            var (success, deleteError) = await ApiClient.DeleteUserAsync(userId);
+
+            if (!string.IsNullOrWhiteSpace(deleteError))
+            {
+                ErrorMessage = deleteError;
+                return;
+            }
+
+            if (!success)
+            {
+                return;
+            }
+
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsDeleting = false;
+        }
+    }
+}

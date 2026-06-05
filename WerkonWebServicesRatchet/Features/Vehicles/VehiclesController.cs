@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WerkonWebServicesRatchet.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Clients;
 using WerkonWebServicesRatchet.Contracts.Vehicles;
@@ -9,7 +11,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Vehicles;
 
 [ApiController]
-//[Route("api/[controller]")]
+[Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class VehiclesController : ControllerBase
 {
     private readonly AppDbContext _dbContext;

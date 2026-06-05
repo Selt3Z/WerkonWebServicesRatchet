@@ -1,0 +1,218 @@
+@page "/users/new"
+@page "/users/{Id:guid}/edit"
+@using WerkonWebServicesRatchet.Web.Authorization
+@using Microsoft.AspNetCore.Components
+@attribute [RequireAdministrator]
+@using WerkonWebServicesRatchet.Web.Models
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject LocalizationService LocalizationService
+
+<PageTitle>@(IsEditMode ? L["User_EditTitle"] : L["User_New"])</PageTitle>
+
+<h1>@(IsEditMode ? L["User_EditTitle"] : L["User_New"])</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="Model" FormName="user-save-form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">@L["UserName"]</label>
+            <InputText class="form-control" @bind-Value="Model.UserName" />
+            <ValidationMessage For="() => Model.UserName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["Name"]</label>
+            <InputText class="form-control" @bind-Value="Model.DisplayName" />
+            <ValidationMessage For="() => Model.DisplayName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["User_Role"]</label>
+            <InputSelect class="form-select" @bind-Value="Model.Role">
+                <option value="">@L["User_Role_Select"]</option>
+                @foreach (var role in AvailableRoles)
+                {
+                    <option value="@role.Code">@LocalizationService.GetRoleDisplayName(role.Code)</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => Model.Role" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["Password"]</label>
+            <InputText type="password" class="form-control" @bind-Value="Model.Password" />
+            @if (IsEditMode)
+            {
+                <div class="form-text">@L["User_PasswordHint"]</div>
+            }
+            else
+            {
+                <div class="form-text">@L["User_PasswordRules"]</div>
+                <ValidationMessage For="() => Model.Password" />
+            }
+        </div>
+
+        @if (!IsEditMode)
+        {
+            <div class="mb-3">
+                <label class="form-label">@L["PasswordConfirm"]</label>
+                <InputText type="password" class="form-control" @bind-Value="ConfirmPassword" />
+            </div>
+        }
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? L["Saving"] : L["Save"])
+        </button>
+
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">
+            @L["Cancel"]
+        </button>
+    </EditForm>
+}
+
+@code {
+    private static readonly (string Code, string _)[] AvailableRoles =
+    [
+        ("Administrator", string.Empty),
+        ("Manager", string.Empty),
+        ("Mechanic", string.Empty)
+    ];
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private UserSaveModel Model { get; set; } = new();
+    private string ConfirmPassword { get; set; } = string.Empty;
+    private bool IsLoading { get; set; }
+    private bool IsSaving { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    private bool IsEditMode => Id.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ErrorMessage = null;
+
+        if (!IsEditMode)
+        {
+            Model = new UserSaveModel();
+            ConfirmPassword = string.Empty;
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+
+            var user = await ApiClient.GetUserAsync(Id!.Value);
+
+            if (user is null)
+            {
+                ErrorMessage = L["User_NotFound"];
+                return;
+            }
+
+            Model = new UserSaveModel
+            {
+                UserName = user.UserName,
+                DisplayName = user.DisplayName,
+                Role = user.Role
+            };
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!IsEditMode)
+        {
+            if (string.IsNullOrWhiteSpace(Model.Password))
+            {
+                ErrorMessage = L["Validation_PasswordRequired"];
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ConfirmPassword))
+            {
+                ErrorMessage = L["Validation_PasswordConfirmRequired"];
+                return;
+            }
+
+            if (!string.Equals(Model.Password, ConfirmPassword, StringComparison.Ordinal))
+            {
+                ErrorMessage = L["Validation_PasswordMismatch"];
+                return;
+            }
+        }
+
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+
+            UserListItem? savedUser;
+            string? apiError;
+
+            if (IsEditMode)
+            {
+                (savedUser, apiError) = await ApiClient.UpdateUserAsync(Id!.Value, Model);
+            }
+            else
+            {
+                (savedUser, apiError) = await ApiClient.CreateUserAsync(Model);
+            }
+
+            if (apiError is null && savedUser is null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(apiError))
+            {
+                ErrorMessage = apiError;
+                return;
+            }
+
+            if (savedUser is null)
+            {
+                ErrorMessage = L["FailedSaveUser"];
+                return;
+            }
+
+            NavigationManager.NavigateTo("/users");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/users");
+    }
+}

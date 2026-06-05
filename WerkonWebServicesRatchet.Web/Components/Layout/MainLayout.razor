@@ -1,4 +1,10 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject ApiAuthenticationStateProvider AuthStateProvider
+@inject AuthCookieContainer CookieContainer
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
 
 <div class="page">
     <div class="sidebar">
@@ -6,8 +12,24 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row px-4 d-flex justify-content-between align-items-center gap-3">
+            <a href="/about">@L["About"]</a>
+            <AuthorizeView>
+                <Authorized Context="authContext">
+                    @{
+                        var role = authContext.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+                    }
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        @if (!string.IsNullOrWhiteSpace(role))
+                        {
+                            <span class="badge text-bg-secondary">@L.GetRoleDisplayName(role)</span>
+                        }
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="LogoutAsync">
+                            @L["Logout"]
+                        </button>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
         </div>
 
         <article class="content px-4">
@@ -17,7 +39,17 @@
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    @L["BlazorError_Message"]
+    <a href="." class="reload">@L["BlazorError_Reload"]</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        await ApiClient.LogoutAsync();
+        CookieContainer.Clear();
+        AuthStateProvider.NotifyUserChanged();
+        NavigationManager.NavigateTo("/login", forceLoad: true);
+    }
+}

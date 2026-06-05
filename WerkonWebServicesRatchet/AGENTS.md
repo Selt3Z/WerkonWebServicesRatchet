@@ -19,8 +19,8 @@ The project should solve a concrete workflow:
 - store their vehicles
 - record visits and completed services
 - keep service history
-- create reminders for future maintenance
-- show staff what follow-up is needed
+- let staff manually create maintenance reminders when needed
+- show staff what follow-up is due
 
 ---
 
@@ -61,7 +61,8 @@ The MVP should include:
 - year
 - license plate
 - VIN optional
-- current mileage
+- do **not** store current mileage on Vehicle; mileage is known only at visit time and is stored on Visit as `MileageAtVisit`
+- when latest mileage is needed (e.g. reminder comparison), derive it from the most recent visit for that vehicle
 
 3. Visits
 - create visit for a vehicle
@@ -78,11 +79,12 @@ The MVP should include:
 - total cost for visit
 
 5. Maintenance reminders
-- created after visit completion
-- reminder type or text
-- due by date and/or mileage
+- created **manually by staff** after a visit when needed (not auto-generated on visit completion)
+- different vehicles need different replacement intervals for parts, fluids, and services; staff decides what to remind and when
+- reminder type or free-text description
+- due by date and/or mileage (mileage compared against latest `MileageAtVisit` from visit history)
 - statuses such as Pending / Due / Sent / Cancelled
-- background worker evaluates reminders
+- **no background worker**; evaluate whether a reminder is due when listing or querying reminders (compare due date to today and due mileage to latest visit mileage)
 
 6. Minimal dashboard
 - today visits
@@ -108,7 +110,8 @@ Required stack:
 - Entity Framework Core
 - EF Core Migrations
 - Docker Compose
-- Background worker for reminder processing
+
+Do **not** add a background worker or separate worker service for MVP.
 
 UI:
 - Prefer minimal Blazor-based internal admin UI unless explicitly requested otherwise.
@@ -131,7 +134,6 @@ Preferred project structure:
 - `src/Application` - use cases, DTOs, validation, business orchestration
 - `src/Domain` - entities, enums, value objects, domain rules
 - `src/Infrastructure` - EF Core, database access, auth, implementations
-- `src/Worker` - background jobs/reminder processing
 - `src/Web` - optional minimal Blazor UI
 - `tests/...` - test projects
 
@@ -172,7 +174,7 @@ Reflect real relationships:
 - one client can have many vehicles
 - one vehicle can have many visits
 - one visit can have many performed service items
-- one visit may create zero or more reminders
+- one vehicle can have many reminders; reminders are created manually by staff and are not auto-created from visits
 
 Prefer explicit domain names over generic names like `Record`, `Item`, `Data`, `Manager`.
 
@@ -265,23 +267,21 @@ It is acceptable to leave room for future extension without implementing it now.
 
 ---
 
-## Background worker rules
+## Maintenance reminder rules
 
-Use a background worker for reminder evaluation.
+Reminders are a lightweight follow-up list, not an automated scheduling system.
 
-Responsibilities:
-- periodically scan reminders
-- mark reminders as due when conditions are met
-- optionally prepare internal notification tasks
-- log meaningful processing info
-- be idempotent where possible
+Requirements:
+- staff creates reminders manually from the UI when a specific client/vehicle needs future follow-up
+- support due by date, due by mileage, or both
+- when listing reminders or building the dashboard, compute Due status from stored due conditions and current data (today's date, latest visit mileage)
+- expose due and pending reminders clearly to staff
 
 Do not:
+- add a background worker, hosted service, or separate worker project for reminder processing
+- auto-create reminders when a visit is completed
 - send real SMS/email/WhatsApp in MVP unless explicitly requested
-- introduce RabbitMQ in the first version
-- build a large job scheduling framework
-
-The first version should simply identify reminders that are due and expose them to staff.
+- introduce RabbitMQ, Hangfire, or a job scheduling framework
 
 ---
 
@@ -310,7 +310,6 @@ For MVP:
 
 Requirements:
 - log important application actions
-- log background worker activity
 - log failures with enough detail for debugging
 - avoid noisy useless logs
 - avoid leaking sensitive personal data in logs
@@ -323,7 +322,7 @@ Return consistent error responses.
 ## Testing rules
 
 Add tests for:
-- reminder business rules
+- reminder due evaluation logic (date and mileage)
 - visit completion logic
 - total cost calculation
 - validation rules
@@ -345,7 +344,6 @@ The project must run locally through Docker Compose.
 Expected services:
 - api
 - postgres
-- worker
 - optionally web
 - optionally pgadmin only if explicitly requested
 
@@ -392,7 +390,9 @@ Always prefer realistic business flow over abstract purity.
 Examples:
 - auto services often need quick client lookup by phone or plate
 - vehicle history must be fast to inspect
-- reminder logic must be understandable by staff
+- reminders are created manually per vehicle because maintenance intervals vary; staff should control what gets tracked
+- mileage belongs on visits, not on the vehicle record
+- reminder due logic must be understandable by staff
 - service catalog should support both standard services and manual entries
 
 Whenever making a design choice, ask:

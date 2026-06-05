@@ -1,16 +1,16 @@
-﻿using System.ComponentModel.DataAnnotations;
+using WerkonWebServicesRatchet.Web.Services;
 
 namespace WerkonWebServicesRatchet.Web.Models;
 
 public sealed class VisitSaveModel
 {
-    [Required(ErrorMessage = "Visit date and time is required.")]
+    [LocalizedRequired(MessageKey = "Validation_VisitDateRequired")]
     public DateTime? VisitedAtLocal { get; set; } = DateTime.Now;
 
-    [Range(0, int.MaxValue, ErrorMessage = "Mileage cannot be negative.")]
+    [LocalizedRange(0, double.MaxValue, MessageKey = "Validation_MileageNegative")]
     public int? MileageAtVisit { get; set; }
 
-    [Required(ErrorMessage = "Customer complaint is required.")]
+    [LocalizedRequired(MessageKey = "Validation_ComplaintRequired")]
     public string CustomerComplaint { get; set; } = string.Empty;
 
     public string? MechanicComment { get; set; }

@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WerkonWebServicesRatchet.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Clients;
 using WerkonWebServicesRatchet.Contracts.Vehicles;
@@ -9,6 +11,7 @@ namespace WerkonWebServicesRatchet.Features.Clients;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class ClientsController : ControllerBase
 {
     private readonly AppDbContext _dbContext;

@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WerkonWebServicesRatchet.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Visits;
 using WerkonWebServicesRatchet.Domain.Entities;
@@ -7,6 +9,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Visits;
 
 [ApiController]
+[Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class VisitsController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
@@ -276,6 +279,42 @@ public sealed class VisitsController : ControllerBase
             Status = visit.Status,
             CreatedAtUtc = visit.CreatedAtUtc
         };
+
+        return Ok(response);
+    }
+
+    [HttpGet("api/visits/by-day")]
+    public async Task<ActionResult<List<VisitsByDayItemResponse>>> GetByDay(
+    [FromQuery] DateOnly? date,
+    CancellationToken cancellationToken)
+    {
+        var selectedDate = date ?? DateOnly.FromDateTime(DateTime.Today);
+
+        var startLocal = selectedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        var endLocal = selectedDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+
+        var startUtc = startLocal.ToUniversalTime();
+        var endUtc = endLocal.ToUniversalTime();
+
+        var response = await _dbContext.Visits
+            .Where(x => x.VisitedAtUtc >= startUtc && x.VisitedAtUtc < endUtc)
+            .OrderBy(x => x.VisitedAtUtc)
+            .Select(x => new VisitsByDayItemResponse
+            {
+                Id = x.Id,
+                VehicleId = x.VehicleId,
+                ClientId = x.Vehicle.ClientId,
+                VisitedAtUtc = x.VisitedAtUtc,
+                MileageAtVisit = x.MileageAtVisit,
+                CustomerComplaint = x.CustomerComplaint,
+                Status = (int)x.Status,
+                ClientFullName = x.Vehicle.Client.FullName,
+                ClientPhoneNumber = x.Vehicle.Client.PhoneNumber,
+                VehicleBrand = x.Vehicle.Brand,
+                VehicleModel = x.Vehicle.Model,
+                LicensePlate = x.Vehicle.LicensePlate
+            })
+            .ToListAsync(cancellationToken);
 
         return Ok(response);
     }

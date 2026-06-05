@@ -1,18 +1,17 @@
-﻿@page "/vehicles/{VehicleId:guid}/visits/new"
+@page "/vehicles/{VehicleId:guid}/visits/new"
 @page "/visits/{Id:guid}/edit"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
-@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 
-<PageTitle>@(IsEditMode ? "Edit Visit" : "New Visit")</PageTitle>
+<PageTitle>@(IsEditMode ? L["Visit_EditTitle"] : L["Visit_New"])</PageTitle>
 
-<h1>@(IsEditMode ? "Edit Visit" : "New Visit")</h1>
+<h1>@(IsEditMode ? L["Visit_EditTitle"] : L["Visit_New"])</h1>
 
 @if (IsLoading)
 {
-    <p>Loading...</p>
+    <p>@L["Loading"]</p>
 }
 else
 {
@@ -21,45 +20,42 @@ else
         <div class="alert alert-danger">@ErrorMessage</div>
     }
 
-    <EditForm Model="Model" OnValidSubmit="SaveAsync">
+    <EditForm Model="Model" FormName="visit-save-form" OnValidSubmit="SaveAsync">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
         <div class="mb-3">
-            <label class="form-label">Visit date and time</label>
-            <div class="mb-3">
-                <label class="form-label">Visit date and time</label>
-                <input class="form-control"
-                       type="datetime-local"
-                       @bind="Model.VisitedAtLocal"
-                       @bind:format="yyyy-MM-ddTHH:mm" />
-                <ValidationMessage For="() => Model.VisitedAtLocal" />
-            </div>
+            <label class="form-label">@L["VisitDateTime"]</label>
+            <input class="form-control"
+                   type="datetime-local"
+                   @bind="Model.VisitedAtLocal"
+                   @bind:format="yyyy-MM-ddTHH:mm" />
+            <ValidationMessage For="() => Model.VisitedAtLocal" />
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Mileage</label>
+            <label class="form-label">@L["Mileage"]</label>
             <InputNumber class="form-control" @bind-Value="Model.MileageAtVisit" />
             <ValidationMessage For="() => Model.MileageAtVisit" />
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Customer complaint</label>
+            <label class="form-label">@L["CustomerComplaint"]</label>
             <InputTextArea class="form-control" @bind-Value="Model.CustomerComplaint" />
             <ValidationMessage For="() => Model.CustomerComplaint" />
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Mechanic comment</label>
+            <label class="form-label">@L["MechanicComment"]</label>
             <InputTextArea class="form-control" @bind-Value="Model.MechanicComment" />
         </div>
 
         <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
-            @(IsSaving ? "Saving..." : "Save")
+            @(IsSaving ? L["Saving"] : L["Save"])
         </button>
 
         <button type="button" class="btn btn-secondary" @onclick="Cancel">
-            Cancel
+            @L["Cancel"]
         </button>
     </EditForm>
 }
@@ -92,11 +88,11 @@ else
         {
             IsLoading = true;
 
-            var visit = await ApiClient.GetVisitAsync(Id.Value);
+            var visit = await ApiClient.GetVisitAsync(Id!.Value);
 
             if (visit is null)
             {
-                ErrorMessage = "Visit not found.";
+                ErrorMessage = L["Visit_NotFound"];
                 return;
             }
 
@@ -137,7 +133,7 @@ else
             {
                 if (!VehicleId.HasValue)
                 {
-                    ErrorMessage = "VehicleId is required to create a visit.";
+                    ErrorMessage = L["VehicleIdRequired"];
                     return;
                 }
 
@@ -146,7 +142,7 @@ else
 
             if (savedVisit is null)
             {
-                ErrorMessage = "Failed to save visit.";
+                ErrorMessage = L["FailedSaveVisit"];
                 return;
             }
 

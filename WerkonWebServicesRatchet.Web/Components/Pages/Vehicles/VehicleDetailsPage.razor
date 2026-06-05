@@ -1,17 +1,16 @@
-﻿@page "/vehicles/{Id:guid}"
+@page "/vehicles/{Id:guid}"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
-@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 
-<PageTitle>Vehicle Details</PageTitle>
+<PageTitle>@L["VehicleDetails_Title"]</PageTitle>
 
-<h1>Vehicle Details</h1>
+<h1>@L["VehicleDetails_Title"]</h1>
 
 @if (IsLoading)
 {
-    <p>Loading...</p>
+    <p>@L["Loading"]</p>
 }
 else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 {
@@ -19,45 +18,45 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 }
 else if (Vehicle is null)
 {
-    <p>Vehicle not found.</p>
+    <p>@L["Vehicle_NotFound"]</p>
 }
 else
 {
     <div class="mb-4">
         <h3>@Vehicle.Brand @Vehicle.Model</h3>
-        <p><strong>Year:</strong> @Vehicle.Year</p>
-        <p><strong>License plate:</strong> @Vehicle.LicensePlate</p>
-        <p><strong>VIN:</strong> @Vehicle.Vin</p>
+        <p><strong>@L["Year"]:</strong> @Vehicle.Year</p>
+        <p><strong>@L["LicensePlate"]:</strong> @Vehicle.LicensePlate</p>
+        <p><strong>@L["Vin"]:</strong> @Vehicle.Vin</p>
 
-        <button class="btn btn-primary" @onclick="EditVehicle">Edit vehicle</button>
-        <button class="btn btn-success" @onclick="AddVisit">Add visit</button>
+        <button class="btn btn-primary" @onclick="EditVehicle">@L["Vehicle_Edit"]</button>
+        <button class="btn btn-success" @onclick="AddVisit">@L["Vehicle_AddVisit"]</button>
     </div>
 
     <div class="mb-4">
-        <h4>Client</h4>
-        <p><strong>Name:</strong> @Vehicle.ClientFullName</p>
-        <p><strong>Phone:</strong> @Vehicle.ClientPhoneNumber</p>
+        <h4>@L["Client"]</h4>
+        <p><strong>@L["Name"]:</strong> @Vehicle.ClientFullName</p>
+        <p><strong>@L["Phone"]:</strong> @Vehicle.ClientPhoneNumber</p>
         <button class="btn btn-sm btn-outline-secondary"
                 @onclick="() => OpenClient(Vehicle.ClientId)">
-            Open client
+            @L["OpenClient"]
         </button>
     </div>
 
-    <h4>Visits</h4>
+    <h4>@L["Visits"]</h4>
 
     @if (Vehicle.Visits.Count == 0)
     {
-        <p>No visits yet.</p>
+        <p>@L["Visits_None"]</p>
     }
     else
     {
         <table class="table">
             <thead>
                 <tr>
-                    <th>Date</th>
-                    <th>Mileage</th>
-                    <th>Complaint</th>
-                    <th>Status</th>
+                    <th>@L["Date"]</th>
+                    <th>@L["Mileage"]</th>
+                    <th>@L["Complaint"]</th>
+                    <th>@L["Status"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -68,11 +67,11 @@ else
                         <td>@visit.VisitedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                         <td>@visit.MileageAtVisit</td>
                         <td>@visit.CustomerComplaint</td>
-                        <td>@GetStatusText(visit.Status)</td>
+                        <td>@L.GetVisitStatus(visit.Status)</td>
                         <td>
                             <button class="btn btn-sm btn-outline-primary"
                                     @onclick="() => OpenVisit(visit.Id)">
-                                Open
+                                @L["Open"]
                             </button>
                         </td>
                     </tr>
@@ -82,7 +81,7 @@ else
     }
 
     <button class="btn btn-secondary" @onclick="BackToClient">
-        Back to client
+        @L["BackToClient"]
     </button>
 }
 
@@ -139,15 +138,6 @@ else
             NavigationManager.NavigateTo("/clients");
         }
     }
-
-    private static string GetStatusText(int status) => status switch
-    {
-        1 => "Created",
-        2 => "In progress",
-        3 => "Completed",
-        4 => "Cancelled",
-        _ => $"Unknown ({status})"
-    };
 
     private void EditVehicle()
     {

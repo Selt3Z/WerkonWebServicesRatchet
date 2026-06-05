@@ -1,0 +1,100 @@
+@page "/login"
+@layout LoginLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@using Microsoft.AspNetCore.WebUtilities
+@using WerkonWebServicesRatchet.Web.Models
+@inject RatchetApiClient ApiClient
+@inject ApiAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>@L["Login_Title"]</PageTitle>
+
+<div class="login-card">
+    <h1 class="login-title">@L["AppName"]</h1>
+
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="Model" FormName="login-form" OnValidSubmit="LoginAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">@L["UserName"]</label>
+            <InputText class="form-control" @bind-Value="Model.UserName" autocomplete="username" />
+            <ValidationMessage For="() => Model.UserName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["Password"]</label>
+            <InputText type="password"
+                       class="form-control"
+                       @bind-Value="Model.Password"
+                       autocomplete="current-password" />
+            <ValidationMessage For="() => Model.Password" />
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
+            @(IsSubmitting ? L["Login_Submitting"] : L["Login_Button"])
+        </button>
+    </EditForm>
+</div>
+
+@code {
+    private LoginModel Model { get; set; } = new();
+    private bool IsSubmitting { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var currentUser = await ApiClient.GetCurrentUserAsync();
+
+        if (currentUser is not null)
+        {
+            NavigationManager.NavigateTo(GetReturnUrl());
+        }
+    }
+
+    private async Task LoginAsync()
+    {
+        try
+        {
+            IsSubmitting = true;
+            ErrorMessage = null;
+
+            var success = await ApiClient.LoginAsync(Model);
+
+            if (!success)
+            {
+                ErrorMessage = L["Login_Failed"];
+                return;
+            }
+
+            AuthStateProvider.NotifyUserChanged();
+            NavigationManager.NavigateTo(GetReturnUrl());
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private string GetReturnUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("returnUrl", out var returnUrlValues))
+        {
+            var returnUrl = returnUrlValues.ToString();
+            return LocalizationService.GetSafeReturnUrl(returnUrl);
+        }
+
+        return "/";
+    }
+}

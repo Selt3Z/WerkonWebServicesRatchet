@@ -1,0 +1,55 @@
+@using System.Reflection
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using WerkonWebServicesRatchet.Web.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@if (!_isReady)
+{
+    <p>@L["Loading"]</p>
+}
+else if (_allowAnonymous)
+{
+    <RouteView RouteData="RouteData" DefaultLayout="DefaultLayout" />
+}
+else if (!_isAuthenticated)
+{
+    <RedirectToLogin />
+}
+else if (_requiresAdministrator && !_isAdministrator)
+{
+    <p role="alert">@L["AccessDenied"]</p>
+}
+else
+{
+    <RouteView RouteData="RouteData" DefaultLayout="DefaultLayout" />
+}
+
+@code {
+    [Parameter]
+    public RouteData RouteData { get; set; } = default!;
+
+    [Parameter]
+    public Type? DefaultLayout { get; set; }
+
+    private bool _isReady;
+    private bool _allowAnonymous;
+    private bool _isAuthenticated;
+    private bool _requiresAdministrator;
+    private bool _isAdministrator;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isReady = false;
+
+        var pageType = RouteData.PageType;
+        _allowAnonymous = pageType.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true).Length > 0;
+        _requiresAdministrator = pageType.GetCustomAttributes(typeof(RequireAdministratorAttribute), inherit: true).Length > 0;
+
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isAuthenticated = state.User.Identity?.IsAuthenticated == true;
+        _isAdministrator = state.User.IsInRole("Administrator");
+
+        _isReady = true;
+    }
+}

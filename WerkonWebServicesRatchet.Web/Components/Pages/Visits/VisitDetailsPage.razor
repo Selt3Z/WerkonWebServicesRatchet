@@ -1,17 +1,16 @@
-﻿@page "/visits/{Id:guid}"
+@page "/visits/{Id:guid}"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
-@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 
-<PageTitle>Visit Details</PageTitle>
+<PageTitle>@L["VisitDetails_Title"]</PageTitle>
 
-<h1>Visit Details</h1>
+<h1>@L["VisitDetails_Title"]</h1>
 
 @if (IsLoading)
 {
-    <p>Loading...</p>
+    <p>@L["Loading"]</p>
 }
 else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 {
@@ -19,36 +18,42 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 }
 else if (Visit is null)
 {
-    <p>Visit not found.</p>
+    <p>@L["Visit_NotFound"]</p>
 }
 else
 {
     <div class="mb-4">
         <h3>@Visit.VisitedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</h3>
-        <p><strong>Status:</strong> @GetStatusText(Visit.Status)</p>
-        <p><strong>Mileage:</strong> @Visit.MileageAtVisit</p>
-        <p><strong>Customer complaint:</strong> @Visit.CustomerComplaint</p>
-        <p><strong>Mechanic comment:</strong> @Visit.MechanicComment</p>
+        <p><strong>@L["Status"]:</strong> @L.GetVisitStatus(Visit.Status)</p>
+        <p><strong>@L["Mileage"]:</strong> @Visit.MileageAtVisit</p>
+        <p><strong>@L["CustomerComplaint"]:</strong> @Visit.CustomerComplaint</p>
+        <p><strong>@L["MechanicComment"]:</strong> @Visit.MechanicComment</p>
 
-        <button class="btn btn-primary" @onclick="EditVisit">Edit visit</button>
+        <button class="btn btn-primary" @onclick="EditVisit">@L["EditVisit"]</button>
     </div>
 
-    <h4>Service items</h4>
+    <h4>@L["ServiceItems"]</h4>
+
+    @if (!string.IsNullOrWhiteSpace(ServiceItemErrorMessage))
+    {
+        <div class="alert alert-danger">@ServiceItemErrorMessage</div>
+    }
 
     @if (Visit.ServiceItems.Count == 0)
     {
-        <p>No service items yet.</p>
+        <p>@L["ServiceItems_None"]</p>
     }
     else
     {
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Qty</th>
-                    <th>Unit price</th>
-                    <th>Total</th>
-                    <th>Comment</th>
+                    <th>@L["Name"]</th>
+                    <th>@L["Quantity"]</th>
+                    <th>@L["UnitPrice"]</th>
+                    <th>@L["Total"]</th>
+                    <th>@L["Comment"]</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -60,6 +65,13 @@ else
                         <td>@item.UnitPrice</td>
                         <td>@item.TotalPrice</td>
                         <td>@item.Comment</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    disabled="@IsDeletingItem"
+                                    @onclick="() => DeleteServiceItemAsync(item.Id)">
+                                @L["Delete"]
+                            </button>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -67,11 +79,51 @@ else
     }
 
     <div class="mt-4">
-        <h4>Total amount: @Visit.TotalAmount</h4>
+        <h4>@L["TotalAmount"]: @Visit.TotalAmount</h4>
+    </div>
+
+    <div class="card mt-4 mb-4">
+        <div class="card-body">
+            <h5 class="card-title">@L["AddServiceItem"]</h5>
+
+            <EditForm Model="NewServiceItem" FormName="service-item-form" OnValidSubmit="AddServiceItemAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="mb-3">
+                    <label class="form-label">@L["Name"]</label>
+                    <InputText class="form-control" @bind-Value="NewServiceItem.Name" />
+                    <ValidationMessage For="() => NewServiceItem.Name" />
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">@L["Quantity"]</label>
+                        <InputNumber class="form-control" @bind-Value="NewServiceItem.Quantity" />
+                        <ValidationMessage For="() => NewServiceItem.Quantity" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">@L["UnitPrice"]</label>
+                        <InputNumber class="form-control" @bind-Value="NewServiceItem.UnitPrice" />
+                        <ValidationMessage For="() => NewServiceItem.UnitPrice" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">@L["Comment"]</label>
+                    <InputTextArea class="form-control" @bind-Value="NewServiceItem.Comment" />
+                </div>
+
+                <button type="submit" class="btn btn-success" disabled="@IsAddingItem">
+                    @(IsAddingItem ? L["Adding"] : L["AddServiceItem_Button"])
+                </button>
+            </EditForm>
+        </div>
     </div>
 
     <button class="btn btn-secondary" @onclick="BackToVehicle">
-        Back to vehicle
+        @L["BackToVehicle"]
     </button>
 }
 
@@ -80,30 +132,88 @@ else
     public Guid Id { get; set; }
 
     private VisitDetailsModel? Visit { get; set; }
+    private VisitServiceItemSaveModel NewServiceItem { get; set; } = new();
     private bool IsLoading { get; set; }
+    private bool IsAddingItem { get; set; }
+    private bool IsDeletingItem { get; set; }
     private string? ErrorMessage { get; set; }
+    private string? ServiceItemErrorMessage { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
         await LoadVisitAsync();
     }
 
-    private async Task LoadVisitAsync()
+    private async Task LoadVisitAsync(bool showFullPageLoading = true)
     {
         try
         {
-            IsLoading = true;
-            ErrorMessage = null;
+            if (showFullPageLoading)
+            {
+                IsLoading = true;
+                ErrorMessage = null;
+            }
 
             Visit = await ApiClient.GetVisitDetailsAsync(Id);
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            if (showFullPageLoading)
+            {
+                ErrorMessage = ex.Message;
+            }
+            else
+            {
+                ServiceItemErrorMessage = ex.Message;
+            }
         }
         finally
         {
-            IsLoading = false;
+            if (showFullPageLoading)
+            {
+                IsLoading = false;
+            }
+        }
+    }
+
+    private async Task AddServiceItemAsync()
+    {
+        try
+        {
+            IsAddingItem = true;
+            ServiceItemErrorMessage = null;
+
+            await ApiClient.CreateVisitServiceItemAsync(Id, NewServiceItem);
+            NewServiceItem = new VisitServiceItemSaveModel();
+            await LoadVisitAsync(showFullPageLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ServiceItemErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsAddingItem = false;
+        }
+    }
+
+    private async Task DeleteServiceItemAsync(Guid itemId)
+    {
+        try
+        {
+            IsDeletingItem = true;
+            ServiceItemErrorMessage = null;
+
+            await ApiClient.DeleteVisitServiceItemAsync(Id, itemId);
+            await LoadVisitAsync(showFullPageLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ServiceItemErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsDeletingItem = false;
         }
     }
 
@@ -118,15 +228,6 @@ else
             NavigationManager.NavigateTo("/clients");
         }
     }
-
-    private static string GetStatusText(int status) => status switch
-    {
-        1 => "Created",
-        2 => "In progress",
-        3 => "Completed",
-        4 => "Cancelled",
-        _ => $"Unknown ({status})"
-    };
 
     private void EditVisit()
     {

@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WerkonWebServicesRatchet.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Visits;
 using WerkonWebServicesRatchet.Domain.Entities;
@@ -7,6 +9,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Visits;
 
 [ApiController]
+[Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class VisitServiceItemsController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
@@ -111,6 +114,7 @@ public sealed class VisitServiceItemsController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize(Policy = AuthorizationPolicies.DeleteServiceItems)]
     [HttpDelete("api/visits/{visitId:guid}/service-items/{itemId:guid}")]
     public async Task<IActionResult> Delete(
     Guid visitId,

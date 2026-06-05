@@ -1,18 +1,18 @@
-﻿using System.ComponentModel.DataAnnotations;
+using WerkonWebServicesRatchet.Web.Services;
 
 namespace WerkonWebServicesRatchet.Web.Models;
 
 public sealed class VehicleSaveModel
 {
-    [Required(ErrorMessage = "Brand is required.")]
+    [LocalizedRequired(MessageKey = "Validation_BrandRequired")]
     public string Brand { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Model is required.")]
+    [LocalizedRequired(MessageKey = "Validation_ModelRequired")]
     public string Model { get; set; } = string.Empty;
 
     public int? Year { get; set; }
 
-    [Required(ErrorMessage = "License plate is required.")]
+    [LocalizedRequired(MessageKey = "Validation_LicensePlateRequired")]
     public string LicensePlate { get; set; } = string.Empty;
 
     public string? Vin { get; set; }
