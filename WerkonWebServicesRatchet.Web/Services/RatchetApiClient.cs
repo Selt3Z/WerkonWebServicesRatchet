@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using WerkonWebServicesRatchet.Web.Models;
@@ -7,10 +8,12 @@ namespace WerkonWebServicesRatchet.Web.Services;
 public sealed class RatchetApiClient
 {
     private readonly HttpClient _httpClient;
+    private readonly AppTimeZone _appTimeZone;
 
-    public RatchetApiClient(HttpClient httpClient)
+    public RatchetApiClient(HttpClient httpClient, AppTimeZone appTimeZone)
     {
         _httpClient = httpClient;
+        _appTimeZone = appTimeZone;
     }
 
     public async Task<bool> LoginAsync(
@@ -29,11 +32,40 @@ public sealed class RatchetApiClient
         return response.IsSuccessStatusCode;
     }
 
+    private static bool IsUnauthorized(HttpResponseMessage response) =>
+        response.StatusCode == System.Net.HttpStatusCode.Unauthorized;
+
+    private static bool IsUnauthorized(Exception ex) =>
+        ex is HttpRequestException httpEx
+        && httpEx.StatusCode == System.Net.HttpStatusCode.Unauthorized;
+
+    private async Task<T?> SafeGetFromJsonAsync<T>(
+        string url,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _httpClient.GetAsync(url, cancellationToken);
+
+            if (IsUnauthorized(response))
+            {
+                return default;
+            }
+
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(cancellationToken);
+        }
+        catch (Exception ex) when (IsUnauthorized(ex))
+        {
+            return default;
+        }
+    }
+
     public async Task LogoutAsync(CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.PostAsync("api/auth/logout", null, cancellationToken);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        if (IsUnauthorized(response))
         {
             return;
         }
@@ -90,8 +122,7 @@ public sealed class RatchetApiClient
             url += "?" + string.Join("&", queryParts);
         }
 
-        var result = await _httpClient.GetFromJsonAsync<List<ClientListItem>>(url, cancellationToken);
-
+        var result = await SafeGetFromJsonAsync<List<ClientListItem>>(url, cancellationToken);
         return result ?? [];
     }
 
@@ -99,9 +130,7 @@ public sealed class RatchetApiClient
     Guid clientId,
     CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<ClientListItem>(
-            $"api/clients/{clientId}",
-            cancellationToken);
+        return await SafeGetFromJsonAsync<ClientListItem>($"api/clients/{clientId}", cancellationToken);
     }
 
     public async Task<ClientListItem?> CreateClientAsync(
@@ -109,6 +138,12 @@ public sealed class RatchetApiClient
         CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.PostAsJsonAsync("api/clients", model, cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ClientListItem>(cancellationToken);
@@ -120,6 +155,12 @@ public sealed class RatchetApiClient
         CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.PutAsJsonAsync($"api/clients/{clientId}", model, cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ClientListItem>(cancellationToken);
@@ -129,9 +170,7 @@ public sealed class RatchetApiClient
     Guid vehicleId,
     CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<VehicleListItem>(
-            $"api/vehicles/{vehicleId}",
-            cancellationToken);
+        return await SafeGetFromJsonAsync<VehicleListItem>($"api/vehicles/{vehicleId}", cancellationToken);
     }
 
     public async Task<VehicleListItem?> CreateVehicleAsync(
@@ -143,6 +182,11 @@ public sealed class RatchetApiClient
             $"api/clients/{clientId}/vehicles",
             model,
             cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
 
         response.EnsureSuccessStatusCode();
 
@@ -159,6 +203,11 @@ public sealed class RatchetApiClient
             model,
             cancellationToken);
 
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
         response.EnsureSuccessStatusCode();
         /*if (!response.IsSuccessStatusCode)
         {
@@ -173,9 +222,7 @@ public sealed class RatchetApiClient
     Guid visitId,
     CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<VisitListItem>(
-            $"api/visits/{visitId}",
-            cancellationToken);
+        return await SafeGetFromJsonAsync<VisitListItem>($"api/visits/{visitId}", cancellationToken);
     }
 
     public async Task<VisitListItem?> CreateVisitAsync(
@@ -190,7 +237,7 @@ public sealed class RatchetApiClient
 
         var payload = new
         {
-            VisitedAtUtc = DateTime.SpecifyKind(model.VisitedAtLocal.Value, DateTimeKind.Local).ToUniversalTime(),
+            VisitedAtUtc = _appTimeZone.ToUtc(model.VisitedAtLocal.Value),
             model.MileageAtVisit,
             model.CustomerComplaint,
             model.MechanicComment
@@ -200,6 +247,11 @@ public sealed class RatchetApiClient
             $"api/vehicles/{vehicleId}/visits",
             payload,
             cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
 
         response.EnsureSuccessStatusCode();
 
@@ -218,7 +270,7 @@ public sealed class RatchetApiClient
 
         var payload = new
         {
-            VisitedAtUtc = DateTime.SpecifyKind(model.VisitedAtLocal.Value, DateTimeKind.Local).ToUniversalTime(),
+            VisitedAtUtc = _appTimeZone.ToUtc(model.VisitedAtLocal.Value),
             model.MileageAtVisit,
             model.CustomerComplaint,
             model.MechanicComment
@@ -228,6 +280,11 @@ public sealed class RatchetApiClient
             $"api/visits/{visitId}",
             payload,
             cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
 
         response.EnsureSuccessStatusCode();
 
@@ -239,36 +296,122 @@ public sealed class RatchetApiClient
     CancellationToken cancellationToken = default)
     {
         var url = $"api/visits/by-day?date={date:yyyy-MM-dd}";
-
-        var result = await _httpClient.GetFromJsonAsync<List<ScheduleVisitItemModel>>(url, cancellationToken);
-
+        var result = await SafeGetFromJsonAsync<List<ScheduleVisitItemModel>>(url, cancellationToken);
         return result ?? [];
     }
     public async Task<ClientDetailsModel?> GetClientDetailsAsync(
     Guid clientId,
     CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<ClientDetailsModel>(
-            $"api/clients/{clientId}/details",
-            cancellationToken);
+        return await SafeGetFromJsonAsync<ClientDetailsModel>($"api/clients/{clientId}/details", cancellationToken);
     }
 
     public async Task<VehicleDetailsModel?> GetVehicleDetailsAsync(
     Guid vehicleId,
     CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<VehicleDetailsModel>(
-            $"api/vehicles/{vehicleId}/details",
-            cancellationToken);
+        return await SafeGetFromJsonAsync<VehicleDetailsModel>($"api/vehicles/{vehicleId}/details", cancellationToken);
     }
 
     public async Task<VisitDetailsModel?> GetVisitDetailsAsync(
-    Guid visitId,
-    CancellationToken cancellationToken = default)
+        Guid visitId,
+        CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<VisitDetailsModel>(
-            $"api/visits/{visitId}/details",
+        return await SafeGetFromJsonAsync<VisitDetailsModel>($"api/visits/{visitId}/details", cancellationToken);
+    }
+
+    public async Task<List<MechanicListItem>> GetMechanicsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.GetAsync("api/visits/mechanics", cancellationToken);
+
+        if (IsUnauthorized(response) || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            return [];
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<MechanicListItem>>(cancellationToken) ?? [];
+    }
+
+    public async Task<VisitDetailsModel?> AssignVisitMechanicAsync(
+        Guid visitId,
+        Guid? mechanicUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PatchAsJsonAsync(
+            $"api/visits/{visitId}/mechanic",
+            new { AssignedMechanicUserId = mechanicUserId },
             cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<VisitDetailsModel>(cancellationToken);
+    }
+
+    public async Task<VisitListItem?> CloseVisitAsync(
+        Guid visitId,
+        CancellationToken cancellationToken = default)
+    {
+        return await UpdateVisitStatusAsync(visitId, VisitStatuses.Completed, cancellationToken);
+    }
+
+    public async Task<VisitListItem?> UpdateVisitStatusAsync(
+        Guid visitId,
+        int status,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PatchAsJsonAsync(
+            $"api/visits/{visitId}/status",
+            new { Status = status },
+            cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<VisitListItem>(cancellationToken);
+    }
+
+    public async Task<(byte[]? Data, string? FileName, string? ErrorMessage)> DownloadVisitWorkOrderAsync(
+        Guid visitId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.GetAsync($"api/visits/{visitId}/work-order", cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return (null, null, null);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, null, await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        var data = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+            ?? $"work-order-{visitId.ToString()[..8]}.pdf";
+
+        return (data, fileName, null);
     }
 
     public async Task<VisitServiceItemModel?> CreateVisitServiceItemAsync(
@@ -280,6 +423,11 @@ public sealed class RatchetApiClient
             $"api/visits/{visitId}/service-items",
             model,
             cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
 
         response.EnsureSuccessStatusCode();
 
@@ -295,13 +443,18 @@ public sealed class RatchetApiClient
             $"api/visits/{visitId}/service-items/{itemId}",
             cancellationToken);
 
+        if (IsUnauthorized(response))
+        {
+            return;
+        }
+
         response.EnsureSuccessStatusCode();
     }
 
     public async Task<List<UserListItem>> GetUsersAsync(
         CancellationToken cancellationToken = default)
     {
-        var result = await _httpClient.GetFromJsonAsync<List<UserListItem>>("api/users", cancellationToken);
+        var result = await SafeGetFromJsonAsync<List<UserListItem>>("api/users", cancellationToken);
         return result ?? [];
     }
 
@@ -309,9 +462,7 @@ public sealed class RatchetApiClient
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        return await _httpClient.GetFromJsonAsync<UserListItem>(
-            $"api/users/{userId}",
-            cancellationToken);
+        return await SafeGetFromJsonAsync<UserListItem>($"api/users/{userId}", cancellationToken);
     }
 
     public async Task<(UserListItem? User, string? ErrorMessage)> CreateUserAsync(
@@ -372,6 +523,65 @@ public sealed class RatchetApiClient
         }
 
         return (true, null);
+    }
+
+    public async Task<List<ReminderByDayItemModel>> GetRemindersByDayAsync(
+        DateOnly date,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"api/reminders/by-day?date={date:yyyy-MM-dd}";
+        var result = await SafeGetFromJsonAsync<List<ReminderByDayItemModel>>(url, cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<ReminderDetailsModel?> GetReminderAsync(
+        Guid reminderId,
+        CancellationToken cancellationToken = default)
+    {
+        return await SafeGetFromJsonAsync<ReminderDetailsModel>($"api/reminders/{reminderId}", cancellationToken);
+    }
+
+    public async Task<ReminderDetailsModel?> CreateReminderAsync(
+        ReminderCreateModel model,
+        CancellationToken cancellationToken = default)
+    {
+        if (!model.ReminderDateLocal.HasValue)
+        {
+            throw new InvalidOperationException("Reminder date is required.");
+        }
+
+        var payload = new
+        {
+            model.VehicleId,
+            model.VisitId,
+            ReminderDate = DateOnly.FromDateTime(model.ReminderDateLocal.Value),
+            model.Note
+        };
+
+        var response = await _httpClient.PostAsJsonAsync("api/reminders", payload, cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ReminderDetailsModel>(cancellationToken);
+    }
+
+    public async Task<ReminderDetailsModel?> CloseReminderAsync(
+        Guid reminderId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PatchAsync($"api/reminders/{reminderId}/close", null, cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ReminderDetailsModel>(cancellationToken);
     }
 
     private static async Task<string> ReadApiErrorMessageAsync(
@@ -449,5 +659,228 @@ public sealed class RatchetApiClient
         }
 
         return content;
+    }
+
+    public async Task<List<CatalogServiceListItem>> GetCatalogServicesAsync(
+        string? search = null,
+        bool activeOnly = false,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query.Add($"search={Uri.EscapeDataString(search.Trim())}");
+        }
+
+        if (activeOnly)
+        {
+            query.Add("activeOnly=true");
+        }
+
+        var url = query.Count == 0
+            ? "api/catalog-services"
+            : $"api/catalog-services?{string.Join("&", query)}";
+
+        var result = await SafeGetFromJsonAsync<List<CatalogServiceListItem>>(url, cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<CatalogServiceListItem?> GetCatalogServiceAsync(
+        Guid serviceId,
+        CancellationToken cancellationToken = default)
+    {
+        return await SafeGetFromJsonAsync<CatalogServiceListItem>(
+            $"api/catalog-services/{serviceId}",
+            cancellationToken);
+    }
+
+    public async Task<CatalogServiceListItem?> CreateCatalogServiceAsync(
+        CatalogServiceSaveModel model,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/catalog-services", model, cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<CatalogServiceListItem>(cancellationToken);
+    }
+
+    public async Task<CatalogServiceListItem?> UpdateCatalogServiceAsync(
+        Guid serviceId,
+        CatalogServiceSaveModel model,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PutAsJsonAsync(
+            $"api/catalog-services/{serviceId}",
+            model,
+            cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<CatalogServiceListItem>(cancellationToken);
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> DeleteCatalogServiceAsync(
+        Guid serviceId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.DeleteAsync($"api/catalog-services/{serviceId}", cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            return (false, null);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return (false, await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return (true, null);
+    }
+
+    public async Task<List<AuditLogItemModel>> GetAuditLogAsync(
+        int take = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SafeGetFromJsonAsync<List<AuditLogItemModel>>(
+            $"api/audit-log?take={take}",
+            cancellationToken);
+
+        return result ?? [];
+    }
+
+    public async Task<SettingsModel?> GetSettingsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await SafeGetFromJsonAsync<SettingsModel>("api/settings", cancellationToken);
+    }
+
+    public async Task<OrganizationProfileModel?> GetOrganizationProfileAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await SafeGetFromJsonAsync<OrganizationProfileModel>("api/settings/organization", cancellationToken);
+    }
+
+    public async Task<OrganizationProfileModel?> UpdateOrganizationProfileAsync(
+        OrganizationProfileModel model,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PutAsJsonAsync(
+            "api/settings/organization",
+            new
+            {
+                model.OrganizationName,
+                model.Phone,
+                model.Email,
+                model.Address,
+                model.Inn,
+                model.Kpp,
+                model.Ogrn,
+                model.BankAccount,
+                model.Bik
+            },
+            cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<OrganizationProfileModel>(cancellationToken);
+    }
+
+    public async Task<OrganizationProfileModel?> UploadOrganizationLogoAsync(
+        string contentType,
+        string dataBase64,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PutAsJsonAsync(
+            "api/settings/organization/logo",
+            new { ContentType = contentType, DataBase64 = dataBase64 },
+            cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<OrganizationProfileModel>(cancellationToken);
+    }
+
+    public async Task<OrganizationProfileModel?> DeleteOrganizationLogoAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.DeleteAsync("api/settings/organization/logo", cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return await response.Content.ReadFromJsonAsync<OrganizationProfileModel>(cancellationToken);
+    }
+
+    public async Task<SettingsModel?> UpdateTimeZoneAsync(
+        string timeZoneId,
+        CancellationToken cancellationToken = default)
+    {
+        return await UpdateSettingsAsync(timeZoneId, null, cancellationToken);
+    }
+
+    public async Task<SettingsModel?> UpdateSettingsAsync(
+        string? timeZoneId,
+        string? theme,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PutAsJsonAsync(
+            "api/settings",
+            new { TimeZoneId = timeZoneId, Theme = theme },
+            cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await ReadApiErrorMessageAsync(response, cancellationToken);
+            throw new InvalidOperationException(message);
+        }
+
+        return await response.Content.ReadFromJsonAsync<SettingsModel>(cancellationToken);
     }
 }

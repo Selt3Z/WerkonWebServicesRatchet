@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
+using WerkonWebServicesRatchet.Infrastructure.Settings;
+using WerkonWebServicesRatchet.Infrastructure.Time;
 
 namespace WerkonWebServicesRatchet.Infrastructure.Identity;
 
@@ -72,6 +75,39 @@ public sealed class IdentitySeedHostedService : IHostedService
         {
             await userManager.AddToRoleAsync(adminUser, AppRoles.Administrator);
         }
+
+        var defaultTimeZoneId = _configuration[AppSettingKeys.TimeZone] ?? "Europe/Moscow";
+        var timeZoneSetting = await dbContext.AppSettings
+            .FirstOrDefaultAsync(x => x.Key == AppSettingKeys.TimeZone, cancellationToken);
+
+        if (timeZoneSetting is null)
+        {
+            dbContext.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.TimeZone,
+                Value = defaultTimeZoneId
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+            timeZoneSetting = await dbContext.AppSettings
+                .FirstAsync(x => x.Key == AppSettingKeys.TimeZone, cancellationToken);
+        }
+
+        var defaultTheme = _configuration[AppSettingKeys.Theme] ?? "light";
+        var themeSetting = await dbContext.AppSettings
+            .FirstOrDefaultAsync(x => x.Key == AppSettingKeys.Theme, cancellationToken);
+
+        if (themeSetting is null)
+        {
+            dbContext.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.Theme,
+                Value = defaultTheme
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        var appTimeZone = scope.ServiceProvider.GetRequiredService<AppTimeZone>();
+        appTimeZone.SetTimeZoneId(timeZoneSetting.Value);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

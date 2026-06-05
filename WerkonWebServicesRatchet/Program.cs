@@ -1,15 +1,24 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using WerkonWebServicesRatchet.Infrastructure.Audit;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
+using WerkonWebServicesRatchet.Infrastructure.Pdf;
+using WerkonWebServicesRatchet.Infrastructure.Settings;
+using WerkonWebServicesRatchet.Infrastructure.Time;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<AuditEntryFactory>();
+builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+        .AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>()));
 
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
@@ -55,8 +64,17 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy(AuthorizationPolicies.ManageUsers, policy =>
         policy.RequireRole(AppRoles.CanManageUsers));
+
+    options.AddPolicy(AuthorizationPolicies.ManageServiceCatalog, policy =>
+        policy.RequireRole(AppRoles.CanManageServiceCatalog));
+
+    options.AddPolicy(AuthorizationPolicies.AssignVisitMechanic, policy =>
+        policy.RequireRole(AppRoles.CanAssignVisitMechanic));
 });
 
+builder.Services.AddSingleton<AppTimeZone>();
+builder.Services.AddSingleton<VisitWorkOrderPdfGenerator>();
+builder.Services.AddScoped<AppSettingsService>();
 builder.Services.AddHostedService<IdentitySeedHostedService>();
 
 var app = builder.Build();

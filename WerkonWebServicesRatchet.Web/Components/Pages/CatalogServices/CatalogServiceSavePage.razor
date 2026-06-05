@@ -1,0 +1,173 @@
+@page "/catalog-services/new"
+@page "/catalog-services/{Id:guid}/edit"
+@using WerkonWebServicesRatchet.Web.Authorization
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@attribute [RequireManagerOrAdministrator]
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? L["ServiceCatalog_EditTitle"] : L["ServiceCatalog_New"])</PageTitle>
+
+<h1>@(IsEditMode ? L["ServiceCatalog_EditTitle"] : L["ServiceCatalog_New"])</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="Model" FormName="catalog-service-save-form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">@L["ServiceCatalog_Name"]</label>
+            <InputText class="form-control" @bind-Value="Model.Name" />
+            <ValidationMessage For="() => Model.Name" />
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">@L["ServiceCatalog_Code"]</label>
+                <InputText class="form-control" @bind-Value="Model.Code" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@L["ServiceCatalog_Category"]</label>
+                <InputText class="form-control" @bind-Value="Model.Category" />
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">@L["UnitPrice"]</label>
+                <InputNumber class="form-control" @bind-Value="Model.DefaultUnitPrice" />
+                <ValidationMessage For="() => Model.DefaultUnitPrice" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@L["ServiceCatalog_Unit"]</label>
+                <InputText class="form-control" @bind-Value="Model.DefaultUnit" />
+                <ValidationMessage For="() => Model.DefaultUnit" />
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["ServiceCatalog_Description"]</label>
+            <InputTextArea class="form-control" @bind-Value="Model.Description" rows="4" />
+        </div>
+
+        <div class="mb-3 form-check">
+            <InputCheckbox class="form-check-input" @bind-Value="Model.IsActive" id="service-active" />
+            <label class="form-check-label" for="service-active">@L["ServiceCatalog_Active"]</label>
+        </div>
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? L["Saving"] : L["Save"])
+        </button>
+
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">
+            @L["Cancel"]
+        </button>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private CatalogServiceSaveModel Model { get; set; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsSaving { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    private bool IsEditMode => Id.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ErrorMessage = null;
+
+        if (!IsEditMode)
+        {
+            Model = new CatalogServiceSaveModel();
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+
+            var service = await ApiClient.GetCatalogServiceAsync(Id!.Value);
+
+            if (service is null)
+            {
+                ErrorMessage = L["ServiceCatalog_NotFoundSingle"];
+                return;
+            }
+
+            Model = new CatalogServiceSaveModel
+            {
+                Name = service.Name,
+                Code = service.Code,
+                Category = service.Category,
+                DefaultUnitPrice = service.DefaultUnitPrice,
+                DefaultUnit = service.DefaultUnit,
+                Description = service.Description,
+                IsActive = service.IsActive
+            };
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+
+            CatalogServiceListItem? saved;
+
+            if (IsEditMode)
+            {
+                saved = await ApiClient.UpdateCatalogServiceAsync(Id!.Value, Model);
+            }
+            else
+            {
+                saved = await ApiClient.CreateCatalogServiceAsync(Model);
+            }
+
+            if (saved is null)
+            {
+                ErrorMessage = L["FailedSaveServiceCatalog"];
+                return;
+            }
+
+            NavigationManager.NavigateTo("/catalog-services");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/catalog-services");
+    }
+}

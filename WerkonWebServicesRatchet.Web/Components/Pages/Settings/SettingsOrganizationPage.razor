@@ -1,0 +1,266 @@
+@page "/settings/organization"
+@attribute [RequireAdministrator]
+@using Microsoft.AspNetCore.Components.Forms
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>@L["Settings_Organization_Title"]</PageTitle>
+
+<h1>@L["Settings_Organization_Title"]</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
+    {
+        <div class="alert alert-success">@SuccessMessage</div>
+    }
+
+    <EditForm Model="_formModel" FormName="organization-profile-form" OnValidSubmit="SaveAsync">
+        <div class="mb-3">
+            <label class="form-label">@L["Settings_Organization_Name"]</label>
+            <InputText class="form-control" @bind-Value="_formModel.OrganizationName" />
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">@L["Phone"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.Phone" />
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">@L["Settings_Organization_Email"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.Email" />
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["Settings_Organization_Address"]</label>
+            <InputTextArea class="form-control" @bind-Value="_formModel.Address" />
+        </div>
+
+        <h4 class="mt-4">@L["Settings_Organization_Requisites"]</h4>
+
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label class="form-label">@L["Settings_Organization_Inn"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.Inn" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">@L["Settings_Organization_Kpp"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.Kpp" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">@L["Settings_Organization_Ogrn"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.Ogrn" />
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8 mb-3">
+                <label class="form-label">@L["Settings_Organization_BankAccount"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.BankAccount" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">@L["Settings_Organization_Bik"]</label>
+                <InputText class="form-control" @bind-Value="_formModel.Bik" />
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label">@L["Settings_Organization_Logo"]</label>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <InputFile id="organization-logo-input"
+                           class="d-none"
+                           accept="image/png,image/jpeg,image/webp"
+                           OnChange="UploadLogoAsync" />
+
+                <label class="btn btn-outline-primary mb-0" for="organization-logo-input">
+                    @(IsUploadingLogo ? L["Settings_Organization_Logo_Uploading"] : L["Settings_Organization_Logo_Upload"])
+                </label>
+
+                @if (_formModel.HasLogo && !string.IsNullOrWhiteSpace(_formModel.LogoDataUrl))
+                {
+                    <img src="@_formModel.LogoDataUrl"
+                         alt="@L["Settings_Organization_Logo"]"
+                         class="organization-logo-preview" />
+
+                    <button type="button"
+                            class="btn btn-outline-danger"
+                            disabled="@IsDeletingLogo"
+                            @onclick="DeleteLogoAsync">
+                        @(IsDeletingLogo ? L["Deleting"] : L["Delete"])
+                    </button>
+                }
+            </div>
+            <div class="form-text">@L["Settings_Organization_Logo_Help"]</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? L["Saving"] : L["Save"])
+        </button>
+
+        <button type="button" class="btn btn-secondary" @onclick="BackToSettings">
+            @L["Settings_Back"]
+        </button>
+    </EditForm>
+}
+
+@code {
+    private OrganizationProfileModel _formModel = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsSaving { get; set; }
+    private bool IsUploadingLogo { get; set; }
+    private bool IsDeletingLogo { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string? SuccessMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            var profile = await ApiClient.GetOrganizationProfileAsync();
+
+            if (profile is null)
+            {
+                ErrorMessage = L["Settings_Organization_LoadFailed"];
+                return;
+            }
+
+            _formModel = profile;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+            SuccessMessage = null;
+
+            var updated = await ApiClient.UpdateOrganizationProfileAsync(_formModel);
+
+            if (updated is null)
+            {
+                ErrorMessage = L["Settings_Organization_SaveFailed"];
+                return;
+            }
+
+            _formModel = updated;
+            SuccessMessage = L["Settings_Organization_Saved"];
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private async Task UploadLogoAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            IsUploadingLogo = true;
+            ErrorMessage = null;
+            SuccessMessage = null;
+
+            var file = e.File;
+
+            if (file.Size == 0 || file.Size > 512 * 1024)
+            {
+                ErrorMessage = L["Settings_Organization_Logo_SizeError"];
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(512 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var bytes = memoryStream.ToArray();
+            var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/png" : file.ContentType;
+
+            var updated = await ApiClient.UploadOrganizationLogoAsync(
+                contentType,
+                Convert.ToBase64String(bytes));
+
+            if (updated is null)
+            {
+                ErrorMessage = L["Settings_Organization_Logo_UploadFailed"];
+                return;
+            }
+
+            _formModel = updated;
+            SuccessMessage = L["Settings_Organization_Logo_Uploaded"];
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsUploadingLogo = false;
+        }
+    }
+
+    private async Task DeleteLogoAsync()
+    {
+        try
+        {
+            IsDeletingLogo = true;
+            ErrorMessage = null;
+            SuccessMessage = null;
+
+            var updated = await ApiClient.DeleteOrganizationLogoAsync();
+
+            if (updated is null)
+            {
+                ErrorMessage = L["Settings_Organization_Logo_DeleteFailed"];
+                return;
+            }
+
+            _formModel = updated;
+            SuccessMessage = L["Settings_Organization_Logo_Deleted"];
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsDeletingLogo = false;
+        }
+    }
+
+    private void BackToSettings()
+    {
+        NavigationManager.NavigateTo("/settings");
+    }
+}

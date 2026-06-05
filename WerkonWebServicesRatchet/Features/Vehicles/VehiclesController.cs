@@ -11,6 +11,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Vehicles;
 
 [ApiController]
+[Route("api/vehicles")]
 [Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class VehiclesController : ControllerBase
 {
@@ -21,7 +22,7 @@ public sealed class VehiclesController : ControllerBase
         _dbContext = dbContext;
     }
 
-    [HttpGet("api/vehicles")]
+    [HttpGet]
     public async Task<ActionResult<List<VehicleResponse>>> Search(
     [FromQuery] string? licensePlate,
     [FromQuery] string? vin,
@@ -59,7 +60,7 @@ public sealed class VehiclesController : ControllerBase
         return Ok(response);
     }
 
-    [HttpGet("api/clients/{clientId:guid}/vehicles")]
+    [HttpGet("~/api/clients/{clientId:guid}/vehicles")]
     public async Task<ActionResult<List<VehicleResponse>>> GetByClientId(
         Guid clientId,
         CancellationToken cancellationToken)
@@ -91,7 +92,7 @@ public sealed class VehiclesController : ControllerBase
         return Ok(response);
     }
 
-    [HttpGet("api/vehicles/{id:guid}")]
+    [HttpGet("{id:guid}")]
     public async Task<ActionResult<VehicleResponse>> GetById(
         Guid id,
         CancellationToken cancellationToken)
@@ -119,7 +120,7 @@ public sealed class VehiclesController : ControllerBase
         return Ok(response);
     }
 
-    [HttpPost("api/clients/{clientId:guid}/vehicles")]
+    [HttpPost("~/api/clients/{clientId:guid}/vehicles")]
     public async Task<ActionResult<VehicleResponse>> Create(
         Guid clientId,
         SaveVehicleRequest request,
@@ -183,7 +184,7 @@ public sealed class VehiclesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = vehicle.Id }, response);
     }
 
-    [HttpPut("api/vehicles/{id:guid}")]
+    [HttpPut("{id:guid}")]
     public async Task<ActionResult<VehicleResponse>> Update(
     Guid id,
     SaveVehicleRequest request,
@@ -242,7 +243,7 @@ public sealed class VehiclesController : ControllerBase
         return Ok(response);
     }
 
-    [HttpGet("api/vehicles/{id:guid}/details")]
+    [HttpGet("{id:guid}/details")]
     public async Task<ActionResult<VehicleDetailsResponse>> GetDetails(
     Guid id,
     CancellationToken cancellationToken)

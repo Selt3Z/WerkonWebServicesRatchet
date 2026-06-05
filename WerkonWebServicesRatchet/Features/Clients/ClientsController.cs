@@ -10,7 +10,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Clients;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/clients")]
 [Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class ClientsController : ControllerBase
 {

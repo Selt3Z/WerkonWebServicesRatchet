@@ -26,6 +26,7 @@ public sealed class ApiAuthResponseHandler : DelegatingHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        _cookieContainer.RestoreFromStore();
         var response = await base.SendAsync(request, cancellationToken);
         _cookieContainer.SaveToStore();
 

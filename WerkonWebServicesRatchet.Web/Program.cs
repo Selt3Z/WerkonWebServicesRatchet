@@ -21,13 +21,16 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
     ];
 });
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CircuitCookieStore>();
+builder.Services.AddScoped<BrowserSessionCookie>();
 builder.Services.AddScoped<CircuitCookieAccessor>();
 builder.Services.AddScoped<ICircuitCookieAccessor>(sp => sp.GetRequiredService<CircuitCookieAccessor>());
 builder.Services.AddScoped<AuthCookieContainer>();
 builder.Services.AddScoped<ApiSessionCoordinator>();
-builder.Services.AddScoped<ApiAuthResponseHandler>();
 builder.Services.AddScoped<CircuitHandler, AuthCircuitHandler>();
+builder.Services.AddSingleton<AppTimeZone>();
+builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<LocalizationService>();
 builder.Services.AddScoped<ApiAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<ApiAuthenticationStateProvider>());
@@ -39,20 +42,29 @@ builder.Services.AddRazorComponents()
 
 var apiBaseUrl = builder.Configuration["RatchetApiBaseUrl"] ?? "http://localhost:5277/";
 
-builder.Services.AddHttpClient<RatchetApiClient>(client =>
+builder.Services.AddScoped<RatchetApiClient>(sp =>
+{
+    var cookieContainer = sp.GetRequiredService<AuthCookieContainer>();
+    cookieContainer.RestoreFromStore();
+
+    var sessionCoordinator = sp.GetRequiredService<ApiSessionCoordinator>();
+    var handler = new ApiAuthResponseHandler(sessionCoordinator, cookieContainer)
     {
-        client.BaseAddress = new Uri(apiBaseUrl);
-    })
-    .AddHttpMessageHandler<ApiAuthResponseHandler>()
-    .ConfigurePrimaryHttpMessageHandler(sp =>
-    {
-        var cookieContainer = sp.GetRequiredService<AuthCookieContainer>();
-        return new HttpClientHandler
+        InnerHandler = new HttpClientHandler
         {
             UseCookies = true,
-            CookieContainer = cookieContainer.Cookies
-        };
-    });
+            CookieContainer = cookieContainer.Cookies,
+            UseProxy = ShouldUseSystemProxy(apiBaseUrl)
+        }
+    };
+
+    var httpClient = new HttpClient(handler, disposeHandler: true)
+    {
+        BaseAddress = new Uri(apiBaseUrl)
+    };
+
+    return new RatchetApiClient(httpClient, sp.GetRequiredService<AppTimeZone>());
+});
 
 var app = builder.Build();
 
@@ -92,3 +104,13 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+static bool ShouldUseSystemProxy(string apiBaseUrl)
+{
+    if (!Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var uri))
+    {
+        return false;
+    }
+
+    return uri.Host is not ("localhost" or "127.0.0.1" or "[::1]");
+}

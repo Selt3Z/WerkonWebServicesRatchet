@@ -1,11 +1,5 @@
-@using Microsoft.AspNetCore.Components.Authorization
+﻿@using Microsoft.AspNetCore.Components.Authorization
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
-
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">@L["AppName"]</a>
-    </div>
-</div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
@@ -13,20 +7,30 @@
     <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
         <nav class="flex-column">
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/">
-                    <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> @L["Nav_Today"]
+                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door-fill-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Today"]</span>
                 </NavLink>
             </div>
 
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="/clients">
-                    <span class="bi bi-people-nav-menu" aria-hidden="true"></span> @L["Nav_Clients"]
+                    <span class="bi bi-person-bust-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Clients"]</span>
                 </NavLink>
             </div>
 
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="/schedule">
-                    <span class="bi bi-calendar3-nav-menu" aria-hidden="true"></span> @L["Nav_Schedule"]
+                    <span class="bi bi-calendar3-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Schedule"]</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/catalog-services">
+                    <span class="bi bi-wrench-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_ServiceCatalog"]</span>
                 </NavLink>
             </div>
         </nav>
@@ -36,7 +40,20 @@
         <AuthorizeView Roles="Administrator">
             <div class="nav-item">
                 <NavLink class="nav-link" href="/users">
-                    <span class="bi bi-shield-lock-nav-menu" aria-hidden="true"></span> @L["Nav_Users"]
+                    <span class="bi bi-users-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Users"]</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/history">
+                    <span class="bi bi-book-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_History"]</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/settings">
+                    <span class="bi bi-gear-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Settings"]</span>
                 </NavLink>
             </div>
         </AuthorizeView>
@@ -69,6 +86,10 @@
                     }
                 </ul>
             }
+        </div>
+
+        <div class="nav-about">
+            <NavLink class="sidebar-about-link" href="/about">@L["About"]</NavLink>
         </div>
     </div>
 </div>

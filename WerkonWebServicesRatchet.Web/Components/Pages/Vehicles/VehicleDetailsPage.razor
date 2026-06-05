@@ -1,8 +1,10 @@
 @page "/vehicles/{Id:guid}"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AppTimeZone AppTimeZone
 
 <PageTitle>@L["VehicleDetails_Title"]</PageTitle>
 
@@ -28,8 +30,9 @@ else
         <p><strong>@L["LicensePlate"]:</strong> @Vehicle.LicensePlate</p>
         <p><strong>@L["Vin"]:</strong> @Vehicle.Vin</p>
 
-        <button class="btn btn-primary" @onclick="EditVehicle">@L["Vehicle_Edit"]</button>
-        <button class="btn btn-success" @onclick="AddVisit">@L["Vehicle_AddVisit"]</button>
+        <button class="btn btn-primary me-2" @onclick="EditVehicle">@L["Vehicle_Edit"]</button>
+        <button class="btn btn-success me-2" @onclick="AddVisit">@L["Vehicle_AddVisit"]</button>
+        <button class="btn btn-outline-success" @onclick="AddReminder">@L["Reminder_Add"]</button>
     </div>
 
     <div class="mb-4">
@@ -64,7 +67,7 @@ else
                 @foreach (var visit in Vehicle.Visits)
                 {
                     <tr>
-                        <td>@visit.VisitedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@AppTimeZone.FromUtc(visit.VisitedAtUtc).ToString("yyyy-MM-dd HH:mm")</td>
                         <td>@visit.MileageAtVisit</td>
                         <td>@visit.CustomerComplaint</td>
                         <td>@L.GetVisitStatus(visit.Status)</td>
@@ -147,5 +150,10 @@ else
     private void AddVisit()
     {
         NavigationManager.NavigateTo($"/vehicles/{Id}/visits/new");
+    }
+
+    private void AddReminder()
+    {
+        NavigationManager.NavigateTo($"/vehicles/{Id}/reminders/new");
     }
 }

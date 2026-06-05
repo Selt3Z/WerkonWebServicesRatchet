@@ -44,6 +44,25 @@ public sealed class LocalizationService
         _ => $"{Get("Status_Unknown")} ({status})"
     };
 
+    public string GetAuditAction(string action) => action switch
+    {
+        "Created" => Get("History_Action_Created"),
+        "Updated" => Get("History_Action_Updated"),
+        "Deleted" => Get("History_Action_Deleted"),
+        _ => action
+    };
+
+    public string GetAuditEntityType(string entityType) => entityType switch
+    {
+        "Client" => Get("History_Entity_Client"),
+        "Vehicle" => Get("History_Entity_Vehicle"),
+        "Visit" => Get("History_Entity_Visit"),
+        "ServiceItem" => Get("History_Entity_ServiceItem"),
+        "Reminder" => Get("History_Entity_Reminder"),
+        "CatalogService" => Get("History_Entity_CatalogService"),
+        _ => entityType
+    };
+
     public string GetCultureSwitchUrl(string cultureCode)
     {
         var returnUrl = GetSafeReturnUrl();

@@ -1,0 +1,151 @@
+@page "/settings"
+@attribute [RequireAdministrator]
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject AppTimeZone AppTimeZone
+@inject ThemeService ThemeService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@L["Settings_Title"]</PageTitle>
+
+<h1>@L["Settings_Title"]</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
+    {
+        <div class="alert alert-success">@SuccessMessage</div>
+    }
+
+    <EditForm Model="_formModel" FormName="settings-form" OnValidSubmit="SaveAsync">
+        <div class="mb-3 settings-timezone-field">
+            <label class="form-label">@L["Settings_TimeZone"]</label>
+            <InputSelect class="form-select" @bind-Value="_formModel.TimeZoneId">
+                @foreach (var timeZone in AvailableTimeZones)
+                {
+                    <option value="@timeZone.Id">@timeZone.DisplayName (@timeZone.Id)</option>
+                }
+            </InputSelect>
+            <div class="form-text">@L["Settings_TimeZone_Help"]</div>
+        </div>
+
+        <div class="mb-3 settings-timezone-field">
+            <label class="form-label">@L["Settings_Theme"]</label>
+            <InputSelect class="form-select" @bind-Value="_formModel.Theme">
+                <option value="light">@L["Settings_Theme_Light"]</option>
+                <option value="dark">@L["Settings_Theme_Dark"]</option>
+            </InputSelect>
+            <div class="form-text">@L["Settings_Theme_Help"]</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? L["Saving"] : L["Save"])
+        </button>
+
+        <button type="button" class="btn btn-outline-secondary" @onclick="OpenOrganizationProfile">
+            @L["Settings_Organization_Open"]
+        </button>
+    </EditForm>
+}
+
+@code {
+    private sealed class SettingsFormModel
+    {
+        public string TimeZoneId { get; set; } = string.Empty;
+
+        public string Theme { get; set; } = "light";
+    }
+
+    private static readonly IReadOnlyList<TimeZoneInfo> AvailableTimeZones =
+        TimeZoneInfo.GetSystemTimeZones()
+            .OrderBy(x => x.BaseUtcOffset)
+            .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private SettingsFormModel _formModel = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsSaving { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string? SuccessMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            var settings = await ApiClient.GetSettingsAsync();
+
+            if (settings is null)
+            {
+                ErrorMessage = L["Settings_LoadFailed"];
+                return;
+            }
+
+            _formModel.TimeZoneId = settings.TimeZoneId;
+            _formModel.Theme = settings.Theme;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OpenOrganizationProfile()
+    {
+        NavigationManager.NavigateTo("/settings/organization");
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+            SuccessMessage = null;
+
+            var updated = await ApiClient.UpdateSettingsAsync(
+                _formModel.TimeZoneId,
+                _formModel.Theme);
+
+            if (updated is null)
+            {
+                ErrorMessage = L["Settings_SaveFailed"];
+                return;
+            }
+
+            AppTimeZone.SetTimeZoneId(updated.TimeZoneId);
+            await ThemeService.ApplyAsync(updated.Theme);
+            _formModel.TimeZoneId = updated.TimeZoneId;
+            _formModel.Theme = updated.Theme;
+            SuccessMessage = L["Settings_Saved"];
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+}

@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Domain.Entities;
+namespace WerkonWebServicesRatchet.Domain.Entities;
 
 public sealed class Vehicle
 {
@@ -14,6 +14,7 @@ public sealed class Vehicle
     public string LicensePlate { get; set; } = string.Empty;
     public string? Vin { get; set; }
     public List<Visit> Visits { get; set; } = [];
+    public List<Reminder> Reminders { get; set; } = [];
 
     public DateTime CreatedAtUtc { get; set; }
 }

@@ -16,8 +16,15 @@
     box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.25);
 }
 
-.login-layout ::deep .login-title {
+.login-layout ::deep .login-logo-wrap {
     margin-bottom: 1.25rem;
-    font-size: 1.5rem;
     text-align: center;
+}
+
+/* Размер логотипа на экране входа: меняйте max-width */
+.login-layout ::deep .login-logo {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
 }

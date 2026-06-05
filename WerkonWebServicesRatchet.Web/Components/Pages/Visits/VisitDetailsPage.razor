@@ -1,8 +1,13 @@
 @page "/visits/{Id:guid}"
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AppTimeZone AppTimeZone
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>@L["VisitDetails_Title"]</PageTitle>
 
@@ -23,14 +28,66 @@ else if (Visit is null)
 else
 {
     <div class="mb-4">
-        <h3>@Visit.VisitedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</h3>
+        <h3>@AppTimeZone.FromUtc(Visit.VisitedAtUtc).ToString("yyyy-MM-dd HH:mm")</h3>
         <p><strong>@L["Status"]:</strong> @L.GetVisitStatus(Visit.Status)</p>
         <p><strong>@L["Mileage"]:</strong> @Visit.MileageAtVisit</p>
         <p><strong>@L["CustomerComplaint"]:</strong> @Visit.CustomerComplaint</p>
         <p><strong>@L["MechanicComment"]:</strong> @Visit.MechanicComment</p>
+        <p><strong>@L["Visit_AssignedMechanic"]:</strong> @GetAssignedMechanicLabel()</p>
 
-        <button class="btn btn-primary" @onclick="EditVisit">@L["EditVisit"]</button>
+        @if (CanAssignMechanic)
+        {
+            <div class="mb-3 d-flex flex-wrap gap-2 align-items-end">
+                <div>
+                    <label class="form-label">@L["Visit_AssignedMechanic"]</label>
+                    <select class="form-select"
+                            value="@FormatMechanicOptionValue(SelectedMechanicUserId)"
+                            @onchange="OnMechanicSelectionChanged">
+                        <option value="">@L["Visit_AssignedMechanic_None"]</option>
+                        @foreach (var mechanic in Mechanics)
+                        {
+                            <option value="@mechanic.Id">@mechanic.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <button class="btn btn-outline-secondary"
+                        disabled="@IsAssigningMechanic"
+                        @onclick="AssignMechanicAsync">
+                    @(IsAssigningMechanic ? L["Visit_AssigningMechanic"] : L["Visit_AssignMechanic"])
+                </button>
+            </div>
+        }
+
+        @if (!IsVisitClosed)
+        {
+            <button class="btn btn-primary me-2" @onclick="EditVisit">@L["EditVisit"]</button>
+        }
+
+        <button class="btn btn-outline-success me-2" @onclick="AddReminder">@L["Reminder_Add"]</button>
+
+        @if (CanCloseVisit)
+        {
+            <button class="btn btn-warning me-2"
+                    disabled="@IsClosingVisit"
+                    @onclick="ConfirmCloseVisitAsync">
+                @(IsClosingVisit ? L["Visit_Closing"] : L["Visit_Close"])
+            </button>
+        }
+
+        @if (CanGenerateWorkOrder)
+        {
+            <button class="btn btn-outline-primary"
+                    disabled="@IsGeneratingWorkOrder"
+                    @onclick="GenerateWorkOrderAsync">
+                @(IsGeneratingWorkOrder ? L["Visit_WorkOrder_Generating"] : L["Visit_WorkOrder_Generate"])
+            </button>
+        }
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(VisitActionErrorMessage))
+    {
+        <div class="alert alert-danger">@VisitActionErrorMessage</div>
+    }
 
     <h4>@L["ServiceItems"]</h4>
 
@@ -66,11 +123,14 @@ else
                         <td>@item.TotalPrice</td>
                         <td>@item.Comment</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-danger"
-                                    disabled="@IsDeletingItem"
-                                    @onclick="() => DeleteServiceItemAsync(item.Id)">
-                                @L["Delete"]
-                            </button>
+                            @if (!IsVisitClosed)
+                            {
+                                <button class="btn btn-sm btn-outline-danger"
+                                        disabled="@IsDeletingItem"
+                                        @onclick="() => DeleteServiceItemAsync(item.Id)">
+                                    @L["Delete"]
+                                </button>
+                            }
                         </td>
                     </tr>
                 }
@@ -82,6 +142,8 @@ else
         <h4>@L["TotalAmount"]: @Visit.TotalAmount</h4>
     </div>
 
+    @if (!IsVisitClosed)
+    {
     <div class="card mt-4 mb-4">
         <div class="card-body">
             <h5 class="card-title">@L["AddServiceItem"]</h5>
@@ -91,10 +153,48 @@ else
                 <ValidationSummary />
 
                 <div class="mb-3">
-                    <label class="form-label">@L["Name"]</label>
-                    <InputText class="form-control" @bind-Value="NewServiceItem.Name" />
-                    <ValidationMessage For="() => NewServiceItem.Name" />
+                    <label class="form-label">@L["ServiceItem_Source"]</label>
+                    <InputSelect class="form-select" @bind-Value="EntryMode" @bind-Value:after="OnEntryModeChanged">
+                        <option value="catalog">@L["ServiceItem_FromCatalog"]</option>
+                        <option value="manual">@L["ServiceItem_Manual"]</option>
+                    </InputSelect>
                 </div>
+
+                @if (IsCatalogEntry)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">@L["ServiceCatalog_Title"]</label>
+                        <InputSelect class="form-select"
+                                     TValue="Guid?"
+                                     Value="SelectedCatalogServiceId"
+                                     ValueChanged="OnCatalogServiceSelectedAsync"
+                                     ValueExpression="() => SelectedCatalogServiceId">
+                            <option value="">@L["ServiceItem_SelectService"]</option>
+                            @foreach (var service in CatalogServices)
+                            {
+                                <option value="@service.Id">
+                                    @service.Name (@service.DefaultUnitPrice.ToString("0.##") / @service.DefaultUnit)
+                                </option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label">@L["Name"]</label>
+                        <InputText class="form-control" @bind-Value="NewServiceItem.Name" />
+                        <ValidationMessage For="() => NewServiceItem.Name" />
+                    </div>
+                }
+
+                @if (IsCatalogEntry)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">@L["Name"]</label>
+                        <input class="form-control" value="@NewServiceItem.Name" readonly />
+                    </div>
+                }
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
@@ -121,6 +221,7 @@ else
             </EditForm>
         </div>
     </div>
+    }
 
     <button class="btn btn-secondary" @onclick="BackToVehicle">
         @L["BackToVehicle"]
@@ -133,15 +234,152 @@ else
 
     private VisitDetailsModel? Visit { get; set; }
     private VisitServiceItemSaveModel NewServiceItem { get; set; } = new();
+    private List<CatalogServiceListItem> CatalogServices { get; set; } = [];
+    private List<MechanicListItem> Mechanics { get; set; } = [];
+    private Guid? SelectedMechanicUserId { get; set; }
+    private bool CanAssignMechanic { get; set; }
+    private string EntryMode { get; set; } = "catalog";
+    private Guid? SelectedCatalogServiceId { get; set; }
+    private bool IsCatalogEntry => EntryMode == "catalog";
+    private bool IsVisitCompleted => Visit?.Status == VisitStatuses.Completed;
+    private bool CanGenerateWorkOrder => IsVisitCompleted && Visit!.ServiceItems.Count > 0;
+    private bool IsVisitClosed => Visit?.Status is VisitStatuses.Completed or VisitStatuses.Canceled;
+    private bool CanCloseVisit => Visit?.Status is VisitStatuses.Created or VisitStatuses.InProgress;
     private bool IsLoading { get; set; }
     private bool IsAddingItem { get; set; }
     private bool IsDeletingItem { get; set; }
+    private bool IsClosingVisit { get; set; }
+    private bool IsGeneratingWorkOrder { get; set; }
+    private bool IsAssigningMechanic { get; set; }
     private string? ErrorMessage { get; set; }
     private string? ServiceItemErrorMessage { get; set; }
+    private string? VisitActionErrorMessage { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        CanAssignMechanic = authState.User.IsInRole("Administrator") || authState.User.IsInRole("Manager");
+
+        await LoadCatalogServicesAsync();
+
+        if (CanAssignMechanic)
+        {
+            await LoadMechanicsAsync();
+        }
+
         await LoadVisitAsync();
+    }
+
+    private async Task LoadMechanicsAsync()
+    {
+        try
+        {
+            Mechanics = await ApiClient.GetMechanicsAsync();
+        }
+        catch
+        {
+            Mechanics = [];
+        }
+    }
+
+    private string GetAssignedMechanicLabel() =>
+        string.IsNullOrWhiteSpace(Visit?.AssignedMechanicDisplayName)
+            ? L["Visit_AssignedMechanic_None"]
+            : Visit!.AssignedMechanicDisplayName!;
+
+    private static string FormatMechanicOptionValue(Guid? mechanicUserId) =>
+        mechanicUserId?.ToString() ?? string.Empty;
+
+    private void OnMechanicSelectionChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        SelectedMechanicUserId = string.IsNullOrWhiteSpace(value)
+            ? null
+            : Guid.Parse(value);
+    }
+
+    private async Task AssignMechanicAsync()
+    {
+        try
+        {
+            IsAssigningMechanic = true;
+            VisitActionErrorMessage = null;
+
+            var updated = await ApiClient.AssignVisitMechanicAsync(Id, SelectedMechanicUserId);
+
+            if (updated is null)
+            {
+                VisitActionErrorMessage = L["Visit_AssignMechanicFailed"];
+                return;
+            }
+
+            Visit = updated;
+            SelectedMechanicUserId = Visit.AssignedMechanicUserId;
+        }
+        catch (Exception ex)
+        {
+            VisitActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsAssigningMechanic = false;
+        }
+    }
+
+    private async Task LoadCatalogServicesAsync()
+    {
+        try
+        {
+            CatalogServices = await ApiClient.GetCatalogServicesAsync(activeOnly: true);
+        }
+        catch
+        {
+            CatalogServices = [];
+        }
+    }
+
+    private void OnEntryModeChanged()
+    {
+        SelectedCatalogServiceId = null;
+
+        if (IsCatalogEntry)
+        {
+            NewServiceItem.Name = string.Empty;
+            return;
+        }
+
+        NewServiceItem.Name = string.Empty;
+        NewServiceItem.UnitPrice = 0;
+    }
+
+    private Task OnCatalogServiceSelectedAsync(Guid? serviceId)
+    {
+        SelectedCatalogServiceId = serviceId;
+
+        if (!serviceId.HasValue)
+        {
+            NewServiceItem.Name = string.Empty;
+            NewServiceItem.UnitPrice = 0;
+            return Task.CompletedTask;
+        }
+
+        var service = CatalogServices.FirstOrDefault(x => x.Id == serviceId.Value);
+
+        if (service is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        NewServiceItem.Name = service.Name;
+        NewServiceItem.UnitPrice = service.DefaultUnitPrice;
+
+        if (string.IsNullOrWhiteSpace(NewServiceItem.Comment) && !string.IsNullOrWhiteSpace(service.Category))
+        {
+            NewServiceItem.Comment = service.Category;
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task LoadVisitAsync(bool showFullPageLoading = true)
@@ -155,6 +393,7 @@ else
             }
 
             Visit = await ApiClient.GetVisitDetailsAsync(Id);
+            SelectedMechanicUserId = Visit?.AssignedMechanicUserId;
         }
         catch (Exception ex)
         {
@@ -183,8 +422,22 @@ else
             IsAddingItem = true;
             ServiceItemErrorMessage = null;
 
+            if (IsCatalogEntry && !SelectedCatalogServiceId.HasValue)
+            {
+                ServiceItemErrorMessage = L["ServiceItem_SelectServiceRequired"];
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(NewServiceItem.Name))
+            {
+                ServiceItemErrorMessage = L["Validation_NameRequired"];
+                return;
+            }
+
             await ApiClient.CreateVisitServiceItemAsync(Id, NewServiceItem);
             NewServiceItem = new VisitServiceItemSaveModel();
+            SelectedCatalogServiceId = null;
+            EntryMode = "catalog";
             await LoadVisitAsync(showFullPageLoading: false);
         }
         catch (Exception ex)
@@ -232,5 +485,86 @@ else
     private void EditVisit()
     {
         NavigationManager.NavigateTo($"/visits/{Id}/edit");
+    }
+
+    private void AddReminder()
+    {
+        NavigationManager.NavigateTo($"/visits/{Id}/reminders/new");
+    }
+
+    private async Task ConfirmCloseVisitAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", L["Visit_CloseConfirm"]);
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await CloseVisitAsync();
+    }
+
+    private async Task CloseVisitAsync()
+    {
+        try
+        {
+            IsClosingVisit = true;
+            VisitActionErrorMessage = null;
+
+            var updated = await ApiClient.CloseVisitAsync(Id);
+
+            if (updated is null)
+            {
+                VisitActionErrorMessage = L["Visit_CloseFailed"];
+                return;
+            }
+
+            await LoadVisitAsync(showFullPageLoading: false);
+        }
+        catch (Exception ex)
+        {
+            VisitActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsClosingVisit = false;
+        }
+    }
+
+    private async Task GenerateWorkOrderAsync()
+    {
+        try
+        {
+            IsGeneratingWorkOrder = true;
+            VisitActionErrorMessage = null;
+
+            var (data, fileName, errorMessage) = await ApiClient.DownloadVisitWorkOrderAsync(Id);
+
+            if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                VisitActionErrorMessage = errorMessage;
+                return;
+            }
+
+            if (data is null || string.IsNullOrWhiteSpace(fileName))
+            {
+                VisitActionErrorMessage = L["Visit_WorkOrder_Failed"];
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync(
+                "ratchetDownload.downloadBase64",
+                fileName,
+                "application/pdf",
+                Convert.ToBase64String(data));
+        }
+        catch (Exception ex)
+        {
+            VisitActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsGeneratingWorkOrder = false;
+        }
     }
 }

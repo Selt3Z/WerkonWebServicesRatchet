@@ -31,4 +31,16 @@ public static class AppRoles
     [
         Administrator
     ];
+
+    public static readonly string[] CanManageServiceCatalog =
+    [
+        Administrator,
+        Manager
+    ];
+
+    public static readonly string[] CanAssignVisitMechanic =
+    [
+        Administrator,
+        Manager
+    ];
 }

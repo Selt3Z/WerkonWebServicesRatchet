@@ -1,0 +1,231 @@
+@page "/reminders/new"
+@page "/visits/{VisitId:guid}/reminders/new"
+@page "/vehicles/{VehicleId:guid}/reminders/new"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject AppTimeZone AppTimeZone
+
+<PageTitle>@L["Reminder_New"]</PageTitle>
+
+<h1>@L["Reminder_New"]</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else
+{
+    @if (ContextLoaded)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <p><strong>@L["Client"]:</strong> @ClientFullName</p>
+                <p><strong>@L["Phone"]:</strong> @ClientPhoneNumber</p>
+                <p><strong>@L["Vehicle"]:</strong> @VehicleBrand @VehicleModel</p>
+                <p><strong>@L["LicensePlate"]:</strong> @LicensePlate</p>
+                @if (VisitId.HasValue && VisitDateLocal.HasValue)
+                {
+                    <p><strong>@L["Visit"]:</strong> @VisitDateLocal.Value.ToString("yyyy-MM-dd HH:mm")</p>
+                }
+            </div>
+        </div>
+    }
+
+    <EditForm Model="Model" FormName="reminder-create-form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">@L["Reminder_Date"]</label>
+            <input class="form-control"
+                   type="date"
+                   value="@ReminderDateString"
+                   @onchange="OnDateChanged" />
+            <ValidationMessage For="() => Model.ReminderDateLocal" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">@L["Reminder_Note"]</label>
+            <InputTextArea class="form-control" @bind-Value="Model.Note" rows="4" />
+        </div>
+
+        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+            @(IsSaving ? L["Saving"] : L["Save"])
+        </button>
+
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">
+            @L["Cancel"]
+        </button>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? VisitId { get; set; }
+
+    [Parameter]
+    public Guid? VehicleId { get; set; }
+
+    private ReminderCreateModel Model { get; set; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsSaving { get; set; }
+    private bool ContextLoaded { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    private string ClientFullName { get; set; } = string.Empty;
+    private string ClientPhoneNumber { get; set; } = string.Empty;
+    private string VehicleBrand { get; set; } = string.Empty;
+    private string VehicleModel { get; set; } = string.Empty;
+    private string LicensePlate { get; set; } = string.Empty;
+    private DateTime? VisitDateLocal { get; set; }
+
+    private string ReminderDateString =>
+        Model.ReminderDateLocal?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ErrorMessage = null;
+        ContextLoaded = false;
+        Model = new ReminderCreateModel();
+
+        if (!VisitId.HasValue && !VehicleId.HasValue)
+        {
+            ErrorMessage = L["Reminder_ContextRequired"];
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+
+            if (VisitId.HasValue)
+            {
+                var visit = await ApiClient.GetVisitAsync(VisitId.Value);
+
+                if (visit is null)
+                {
+                    ErrorMessage = L["Visit_NotFound"];
+                    return;
+                }
+
+                Model.VehicleId = visit.VehicleId;
+                Model.VisitId = visit.Id;
+                VisitDateLocal = AppTimeZone.FromUtc(visit.VisitedAtUtc);
+
+                var vehicle = await ApiClient.GetVehicleDetailsAsync(visit.VehicleId);
+
+                if (vehicle is null)
+                {
+                    ErrorMessage = L["Vehicle_NotFound"];
+                    return;
+                }
+
+                FillVehicleContext(vehicle);
+            }
+            else if (VehicleId.HasValue)
+            {
+                Model.VehicleId = VehicleId.Value;
+
+                var vehicle = await ApiClient.GetVehicleDetailsAsync(VehicleId.Value);
+
+                if (vehicle is null)
+                {
+                    ErrorMessage = L["Vehicle_NotFound"];
+                    return;
+                }
+
+                FillVehicleContext(vehicle);
+            }
+
+            ContextLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void FillVehicleContext(VehicleDetailsModel vehicle)
+    {
+        ClientFullName = vehicle.ClientFullName;
+        ClientPhoneNumber = vehicle.ClientPhoneNumber;
+        VehicleBrand = vehicle.Brand;
+        VehicleModel = vehicle.Model;
+        LicensePlate = vehicle.LicensePlate;
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value is null || string.IsNullOrWhiteSpace(e.Value.ToString()))
+        {
+            Model.ReminderDateLocal = null;
+            return;
+        }
+
+        if (DateOnly.TryParse(e.Value.ToString(), out var parsedDate))
+        {
+            Model.ReminderDateLocal = parsedDate.ToDateTime(TimeOnly.MinValue);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!Model.ReminderDateLocal.HasValue)
+        {
+            ErrorMessage = L["Validation_ReminderDateRequired"];
+            return;
+        }
+
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+
+            var saved = await ApiClient.CreateReminderAsync(Model);
+
+            if (saved is null)
+            {
+                ErrorMessage = L["FailedSaveReminder"];
+                return;
+            }
+
+            NavigationManager.NavigateTo($"/reminders/{saved.Id}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        if (VisitId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/visits/{VisitId.Value}");
+            return;
+        }
+
+        if (VehicleId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/vehicles/{VehicleId.Value}");
+            return;
+        }
+
+        NavigationManager.NavigateTo("/schedule");
+    }
+}

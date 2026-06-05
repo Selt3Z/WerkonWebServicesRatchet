@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Web.Models;
+namespace WerkonWebServicesRatchet.Web.Models;
 
 public sealed class ScheduleVisitItemModel
 {
@@ -10,6 +10,7 @@ public sealed class ScheduleVisitItemModel
     public int? MileageAtVisit { get; set; }
     public string CustomerComplaint { get; set; } = string.Empty;
     public int Status { get; set; }
+    public string? AssignedMechanicDisplayName { get; set; }
 
     public string ClientFullName { get; set; } = string.Empty;
     public string ClientPhoneNumber { get; set; } = string.Empty;

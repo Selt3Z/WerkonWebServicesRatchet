@@ -1,11 +1,47 @@
 @page "/"
+@using WerkonWebServicesRatchet.Web.Services
+@inject AppTimeZone AppTimeZone
+@inject ThemeService ThemeService
+@inject RatchetApiClient ApiClient
 
-<PageTitle>@L["AppName"]</PageTitle>
+<PageTitle>@L["Dashboard_Title"]</PageTitle>
 
-<h1>@L["AppName"]</h1>
+@if (!IsReady)
+{
+    <p>@L["Loading"]</p>
+}
+else
+{
+    <div class="dashboard-page">
+        <ScheduleDayView Date="@Today" ShowTodayMessages="true" FullWidth="true" />
+    </div>
+}
 
-<p>@L["Home_Description"]</p>
+@code {
+    private DateOnly Today { get; set; }
+    private bool IsReady { get; set; }
 
-<p>
-    <a href="/clients">@L["Home_OpenClients"]</a>
-</p>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settings = await ApiClient.GetSettingsAsync();
+
+            if (settings is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(settings.TimeZoneId))
+                {
+                    AppTimeZone.SetTimeZoneId(settings.TimeZoneId);
+                }
+
+                await ThemeService.ApplyAsync(settings.Theme);
+            }
+        }
+        catch
+        {
+        }
+
+        Today = AppTimeZone.GetToday();
+        IsReady = true;
+    }
+}

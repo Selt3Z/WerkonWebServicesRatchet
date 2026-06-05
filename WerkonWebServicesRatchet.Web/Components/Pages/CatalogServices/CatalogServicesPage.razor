@@ -1,0 +1,167 @@
+@page "/catalog-services"
+@using Microsoft.AspNetCore.Components.Authorization
+@using WerkonWebServicesRatchet.Web.Models
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>@L["ServiceCatalog_Title"]</PageTitle>
+
+<h1>@L["ServiceCatalog_Title"]</h1>
+
+<div class="row g-3 mb-3 catalog-services-filters">
+    <div class="col-md-4">
+        <label class="form-label">@L["Search"]</label>
+        <input class="form-control" @bind="SearchFilter" @bind:event="oninput" />
+    </div>
+</div>
+
+<div class="mb-3">
+    <button class="btn btn-primary me-2" @onclick="LoadServicesAsync">@L["Search"]</button>
+    <button class="btn btn-secondary me-2" @onclick="ClearFilters">@L["Clear"]</button>
+    @if (CanManageCatalog)
+    {
+        <button class="btn btn-success" @onclick="OpenNewService">@L["ServiceCatalog_Add"]</button>
+    }
+</div>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Services.Count == 0)
+{
+    <p>@L["ServiceCatalog_NotFound"]</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@L["ServiceCatalog_Name"]</th>
+                <th>@L["ServiceCatalog_Code"]</th>
+                <th>@L["ServiceCatalog_Category"]</th>
+                <th>@L["UnitPrice"]</th>
+                <th>@L["ServiceCatalog_Unit"]</th>
+                <th>@L["Status"]</th>
+                @if (CanManageCatalog)
+                {
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var service in Services)
+            {
+                <tr>
+                    <td>@service.Name</td>
+                    <td>@(service.Code ?? "—")</td>
+                    <td>@(service.Category ?? "—")</td>
+                    <td>@service.DefaultUnitPrice.ToString("0.##")</td>
+                    <td>@service.DefaultUnit</td>
+                    <td>@(service.IsActive ? L["ServiceCatalog_Active"] : L["ServiceCatalog_Inactive"])</td>
+                    @if (CanManageCatalog)
+                    {
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary me-1"
+                                    @onclick="() => EditService(service.Id)">
+                                @L["Edit"]
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    disabled="@IsDeleting"
+                                    @onclick="() => DeleteServiceAsync(service.Id)">
+                                @L["Delete"]
+                            </button>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<CatalogServiceListItem> Services { get; set; } = [];
+    private string? SearchFilter { get; set; }
+    private bool CanManageCatalog { get; set; }
+    private bool IsLoading { get; set; }
+    private bool IsDeleting { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        CanManageCatalog = authState.User.IsInRole("Administrator") || authState.User.IsInRole("Manager");
+
+        await LoadServicesAsync();
+    }
+
+    private async Task LoadServicesAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            Services = await ApiClient.GetCatalogServicesAsync(SearchFilter);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        SearchFilter = null;
+        await LoadServicesAsync();
+    }
+
+    private void OpenNewService()
+    {
+        NavigationManager.NavigateTo("/catalog-services/new");
+    }
+
+    private void EditService(Guid serviceId)
+    {
+        NavigationManager.NavigateTo($"/catalog-services/{serviceId}/edit");
+    }
+
+    private async Task DeleteServiceAsync(Guid serviceId)
+    {
+        try
+        {
+            IsDeleting = true;
+            ErrorMessage = null;
+            var (success, deleteError) = await ApiClient.DeleteCatalogServiceAsync(serviceId);
+
+            if (!string.IsNullOrWhiteSpace(deleteError))
+            {
+                ErrorMessage = deleteError;
+                return;
+            }
+
+            if (!success)
+            {
+                return;
+            }
+
+            await LoadServicesAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsDeleting = false;
+        }
+    }
+}

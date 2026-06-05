@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using WerkonWebServicesRatchet.Web.Authorization
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
 
 @if (!_isReady)
 {
@@ -17,6 +18,10 @@ else if (!_isAuthenticated)
     <RedirectToLogin />
 }
 else if (_requiresAdministrator && !_isAdministrator)
+{
+    <p role="alert">@L["AccessDenied"]</p>
+}
+else if (_requiresManagerOrAdministrator && !_isManagerOrAdministrator)
 {
     <p role="alert">@L["AccessDenied"]</p>
 }
@@ -36,20 +41,54 @@ else
     private bool _allowAnonymous;
     private bool _isAuthenticated;
     private bool _requiresAdministrator;
+    private bool _requiresManagerOrAdministrator;
     private bool _isAdministrator;
+    private bool _isManagerOrAdministrator;
+
+    protected override void OnInitialized()
+    {
+        AuthenticationStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                await RefreshAsync();
+                StateHasChanged();
+            });
+        }
+        catch
+        {
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
+    {
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
     {
         _isReady = false;
 
         var pageType = RouteData.PageType;
         _allowAnonymous = pageType.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true).Length > 0;
         _requiresAdministrator = pageType.GetCustomAttributes(typeof(RequireAdministratorAttribute), inherit: true).Length > 0;
+        _requiresManagerOrAdministrator = pageType.GetCustomAttributes(typeof(RequireManagerOrAdministratorAttribute), inherit: true).Length > 0;
 
         var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _isAuthenticated = state.User.Identity?.IsAuthenticated == true;
         _isAdministrator = state.User.IsInRole("Administrator");
+        _isManagerOrAdministrator = _isAdministrator || state.User.IsInRole("Manager");
 
         _isReady = true;
+    }
+
+    public void Dispose()
+    {
+        AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
     }
 }

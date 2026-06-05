@@ -1,0 +1,166 @@
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject AppTimeZone AppTimeZone
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else
+{
+    <div class="schedule-split @(FullWidth ? "schedule-split-full" : string.Empty)">
+        <section class="schedule-panel">
+            <h4 class="schedule-section-title">@L["Schedule_VisitsSection"]</h4>
+            <div class="schedule-scroll">
+                @if (Visits.Count == 0)
+                {
+                    <p>@(ShowTodayMessages ? L["Schedule_NoVisitsToday"] : L["Schedule_NoVisits"])</p>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>@L["Time"]</th>
+                                <th>@L["Client"]</th>
+                                <th>@L["Phone"]</th>
+                                <th>@L["Vehicle"]</th>
+                                <th>@L["Plate"]</th>
+                                <th>@L["Complaint"]</th>
+                                <th>@L["Schedule_Mechanic"]</th>
+                                <th>@L["Status"]</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var visit in Visits)
+                            {
+                                <tr>
+                                    <td>@AppTimeZone.FromUtc(visit.VisitedAtUtc).ToString("HH:mm")</td>
+                                    <td>@visit.ClientFullName</td>
+                                    <td>@visit.ClientPhoneNumber</td>
+                                    <td>@visit.VehicleBrand @visit.VehicleModel</td>
+                                    <td>@visit.LicensePlate</td>
+                                    <td>@visit.CustomerComplaint</td>
+                                    <td>@(visit.AssignedMechanicDisplayName ?? L["Visit_AssignedMechanic_None"])</td>
+                                    <td>@L.GetVisitStatus(visit.Status)</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => OpenVisit(visit.Id)">
+                                            @L["Open"]
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </section>
+
+        <section class="schedule-panel">
+            <h4 class="schedule-section-title">@L["Schedule_RemindersSection"]</h4>
+            <div class="schedule-scroll">
+                @if (Reminders.Count == 0)
+                {
+                    <p>@(ShowTodayMessages ? L["Schedule_NoRemindersToday"] : L["Schedule_NoReminders"])</p>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>@L["Date"]</th>
+                                <th>@L["Client"]</th>
+                                <th>@L["Vehicle"]</th>
+                                <th>@L["Reminder_Note"]</th>
+                                <th>@L["Status"]</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reminder in Reminders)
+                            {
+                                <tr>
+                                    <td>@AppTimeZone.FromUtc(reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</td>
+                                    <td>@reminder.ClientFullName</td>
+                                    <td>@reminder.VehicleBrand @reminder.VehicleModel (@reminder.LicensePlate)</td>
+                                    <td>@reminder.Note</td>
+                                    <td>
+                                        @if (reminder.IsClosed)
+                                        {
+                                            <span class="reminder-check" title="@L["Reminder_Closed"]">✔</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => OpenReminder(reminder.Id)">
+                                            @L["Open"]
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public DateOnly Date { get; set; }
+
+    [Parameter]
+    public bool ShowTodayMessages { get; set; }
+
+    [Parameter]
+    public bool FullWidth { get; set; }
+
+    private List<ScheduleVisitItemModel> Visits { get; set; } = [];
+    private List<ReminderByDayItemModel> Reminders { get; set; } = [];
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            Visits = await ApiClient.GetVisitsByDayAsync(Date);
+            Reminders = await ApiClient.GetRemindersByDayAsync(Date);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OpenVisit(Guid visitId)
+    {
+        NavigationManager.NavigateTo($"/visits/{visitId}");
+    }
+
+    private void OpenReminder(Guid reminderId)
+    {
+        NavigationManager.NavigateTo($"/reminders/{reminderId}");
+    }
+}

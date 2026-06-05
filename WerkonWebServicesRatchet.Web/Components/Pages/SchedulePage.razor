@@ -1,7 +1,6 @@
 @page "/schedule"
-@using WerkonWebServicesRatchet.Web.Models
-@inject RatchetApiClient ApiClient
-@inject NavigationManager NavigationManager
+@using WerkonWebServicesRatchet.Web.Services
+@inject AppTimeZone AppTimeZone
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -10,8 +9,7 @@
 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
     <button class="btn btn-outline-secondary" @onclick="PreviousDayAsync">←</button>
 
-    <input class="form-control"
-           style="max-width: 220px;"
+    <input class="form-control schedule-date-input"
            type="date"
            value="@SelectedDateString"
            @onchange="OnDateChanged" />
@@ -24,109 +22,35 @@
     }
 </div>
 
-@if (IsLoading)
-{
-    <p>@L["Loading"]</p>
-}
-else if (!string.IsNullOrWhiteSpace(ErrorMessage))
-{
-    <div class="alert alert-danger">@ErrorMessage</div>
-}
-else if (Visits.Count == 0)
-{
-    <p>@L["Schedule_NoVisits"]</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>@L["Time"]</th>
-                <th>@L["Client"]</th>
-                <th>@L["Phone"]</th>
-                <th>@L["Vehicle"]</th>
-                <th>@L["Plate"]</th>
-                <th>@L["Complaint"]</th>
-                <th>@L["Status"]</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var visit in Visits)
-            {
-                <tr>
-                    <td>@visit.VisitedAtUtc.ToLocalTime().ToString("HH:mm")</td>
-                    <td>@visit.ClientFullName</td>
-                    <td>@visit.ClientPhoneNumber</td>
-                    <td>@visit.VehicleBrand @visit.VehicleModel</td>
-                    <td>@visit.LicensePlate</td>
-                    <td>@visit.CustomerComplaint</td>
-                    <td>@L.GetVisitStatus(visit.Status)</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary"
-                                @onclick="() => OpenVisit(visit.Id)">
-                            @L["Open"]
-                        </button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+<ScheduleDayView Date="@SelectedDate" ShowTodayMessages="false" />
 
 @code {
-    private List<ScheduleVisitItemModel> Visits { get; set; } = [];
-    private DateOnly SelectedDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
-    private bool IsLoading { get; set; }
-    private string? ErrorMessage { get; set; }
-
-    private bool IsTodaySelected => SelectedDate == DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly SelectedDate { get; set; }
+    private bool IsTodaySelected => SelectedDate == AppTimeZone.GetToday();
     private string PageTitleText => IsTodaySelected ? L["Today_Title"] : L["Schedule_Title"];
     private string SelectedDateString => SelectedDate.ToString("yyyy-MM-dd");
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await LoadAsync();
+        SelectedDate = AppTimeZone.GetToday();
     }
 
-    private async Task LoadAsync()
-    {
-        try
-        {
-            IsLoading = true;
-            ErrorMessage = null;
-
-            Visits = await ApiClient.GetVisitsByDayAsync(SelectedDate);
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = ex.Message;
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    private async Task PreviousDayAsync()
+    private void PreviousDayAsync()
     {
         SelectedDate = SelectedDate.AddDays(-1);
-        await LoadAsync();
     }
 
-    private async Task NextDayAsync()
+    private void NextDayAsync()
     {
         SelectedDate = SelectedDate.AddDays(1);
-        await LoadAsync();
     }
 
-    private async Task GoToTodayAsync()
+    private void GoToTodayAsync()
     {
-        SelectedDate = DateOnly.FromDateTime(DateTime.Today);
-        await LoadAsync();
+        SelectedDate = AppTimeZone.GetToday();
     }
 
-    private async Task OnDateChanged(ChangeEventArgs e)
+    private void OnDateChanged(ChangeEventArgs e)
     {
         if (e.Value is null)
         {
@@ -136,12 +60,6 @@ else
         if (DateOnly.TryParse(e.Value.ToString(), out var parsedDate))
         {
             SelectedDate = parsedDate;
-            await LoadAsync();
         }
-    }
-
-    private void OpenVisit(Guid visitId)
-    {
-        NavigationManager.NavigateTo($"/visits/{visitId}");
     }
 }

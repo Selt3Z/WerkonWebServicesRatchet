@@ -1,0 +1,153 @@
+@page "/reminders/{Id:guid}"
+@using Microsoft.AspNetCore.Components
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject AppTimeZone AppTimeZone
+
+<PageTitle>@L["Reminder_DetailsTitle"]</PageTitle>
+
+<h1 class="d-flex align-items-center gap-2">
+    @L["Reminder_DetailsTitle"]
+    @if (Reminder?.IsClosed == true)
+    {
+        <span class="reminder-check" title="@L["Reminder_Closed"]" aria-label="@L["Reminder_Closed"]">✔</span>
+    }
+</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Reminder is null)
+{
+    <p>@L["Reminder_NotFound"]</p>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                    <p><strong>@L["Reminder_Date"]:</strong> @AppTimeZone.FromUtc(Reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</p>
+                    <p><strong>@L["Reminder_Note"]:</strong> @(string.IsNullOrWhiteSpace(Reminder.Note) ? "—" : Reminder.Note)</p>
+                </div>
+                @if (Reminder.IsClosed)
+                {
+                    <span class="reminder-check reminder-check-lg" title="@L["Reminder_Closed"]">✔</span>
+                }
+            </div>
+
+            <p><strong>@L["Client"]:</strong> @Reminder.ClientFullName</p>
+            <p><strong>@L["Phone"]:</strong> @Reminder.ClientPhoneNumber</p>
+            <p><strong>@L["Vehicle"]:</strong> @Reminder.VehicleBrand @Reminder.VehicleModel</p>
+            <p><strong>@L["LicensePlate"]:</strong> @Reminder.LicensePlate</p>
+
+            @if (Reminder.VisitId.HasValue)
+            {
+                <button class="btn btn-sm btn-outline-primary mt-2"
+                        @onclick="() => OpenVisit(Reminder.VisitId!.Value)">
+                    @L["OpenVisit"]
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!Reminder.IsClosed)
+    {
+        <button class="btn btn-success me-2"
+                disabled="@IsClosing"
+                @onclick="ConfirmCloseAsync">
+            @(IsClosing ? L["Reminder_Closing"] : L["Reminder_Close"])
+        </button>
+    }
+
+    <button class="btn btn-secondary" @onclick="BackToSchedule">
+        @L["BackToSchedule"]
+    </button>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private ReminderDetailsModel? Reminder { get; set; }
+    private bool IsLoading { get; set; }
+    private bool IsClosing { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadReminderAsync();
+    }
+
+    private async Task LoadReminderAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            Reminder = await ApiClient.GetReminderAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task ConfirmCloseAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", L["Reminder_CloseConfirm"]);
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        try
+        {
+            IsClosing = true;
+            ErrorMessage = null;
+
+            Reminder = await ApiClient.CloseReminderAsync(Id);
+
+            if (Reminder is null)
+            {
+                ErrorMessage = L["FailedCloseReminder"];
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsClosing = false;
+        }
+    }
+
+    private void OpenVisit(Guid visitId)
+    {
+        NavigationManager.NavigateTo($"/visits/{visitId}");
+    }
+
+    private void BackToSchedule()
+    {
+        NavigationManager.NavigateTo("/schedule");
+    }
+}

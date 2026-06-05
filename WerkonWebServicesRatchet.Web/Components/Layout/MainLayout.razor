@@ -1,55 +1,136 @@
 @inherits LayoutComponentBase
+
 @using Microsoft.AspNetCore.Components.Authorization
+
 @using System.Security.Claims
+
 @inject ApiAuthenticationStateProvider AuthStateProvider
+
 @inject AuthCookieContainer CookieContainer
+
 @inject RatchetApiClient ApiClient
+
 @inject NavigationManager NavigationManager
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inject BrowserSessionCookie BrowserSessionCookie
 
-    <main>
-        <div class="top-row px-4 d-flex justify-content-between align-items-center gap-3">
-            <a href="/about">@L["About"]</a>
-            <AuthorizeView>
-                <Authorized Context="authContext">
-                    @{
-                        var role = authContext.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+
+
+<div class="page">
+
+    <header class="main-header-bar px-4 d-flex justify-content-between align-items-center gap-3">
+
+        <NavLink class="main-header-logo-link" href="/" Match="NavLinkMatch.All">
+
+            <img class="main-header-logo" src="images/longlogo.png" alt="@L["AppName"]" />
+
+        </NavLink>
+
+
+
+        <AuthorizeView>
+
+            <Authorized Context="authContext">
+
+                <AppSettingsInitializer />
+
+                @{
+
+                    var displayName = authContext.User.FindFirst("display_name")?.Value ?? string.Empty;
+
+                    var role = authContext.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+
+                }
+
+                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+
+                    @if (!string.IsNullOrWhiteSpace(displayName))
+
+                    {
+
+                        <span class="main-header-user-name">@displayName</span>
+
                     }
-                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                        @if (!string.IsNullOrWhiteSpace(role))
-                        {
-                            <span class="badge text-bg-secondary">@L.GetRoleDisplayName(role)</span>
-                        }
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="LogoutAsync">
-                            @L["Logout"]
-                        </button>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
+
+                    @if (!string.IsNullOrWhiteSpace(role))
+
+                    {
+
+                        <span class="badge text-bg-secondary main-header-role-badge">@L.GetRoleDisplayName(role)</span>
+
+                    }
+
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="LogoutAsync">
+
+                        @L["Logout"]
+
+                    </button>
+
+                </div>
+
+            </Authorized>
+
+        </AuthorizeView>
+
+    </header>
+
+
+
+    <div class="page-body">
+
+        <div class="sidebar">
+
+            <NavMenu />
+
         </div>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+
+
+        <main>
+
+            <article class="content px-4">
+
+                @Body
+
+            </article>
+
+        </main>
+
+    </div>
+
 </div>
+
+
 
 <div id="blazor-error-ui" data-nosnippet>
+
     @L["BlazorError_Message"]
+
     <a href="." class="reload">@L["BlazorError_Reload"]</a>
+
     <span class="dismiss">🗙</span>
+
 </div>
 
+
+
 @code {
+
     private async Task LogoutAsync()
+
     {
+
         await ApiClient.LogoutAsync();
+
         CookieContainer.Clear();
+
+        await BrowserSessionCookie.ClearAsync();
+
         AuthStateProvider.NotifyUserChanged();
+
         NavigationManager.NavigateTo("/login", forceLoad: true);
+
     }
+
 }
+

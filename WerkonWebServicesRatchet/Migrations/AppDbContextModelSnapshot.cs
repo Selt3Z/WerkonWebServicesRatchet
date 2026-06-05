@@ -152,6 +152,115 @@ namespace WerkonWebServicesRatchet.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings");
+                });
+
+            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.AuditLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("EntityUrl")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UserDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.ToTable("AuditLogEntries");
+                });
+
+            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.CatalogService", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultUnit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("DefaultUnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("Code");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("CatalogServices");
+                });
+
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Client", b =>
                 {
                     b.Property<Guid>("Id")
@@ -174,7 +283,50 @@ namespace WerkonWebServicesRatchet.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FullName");
+
+                    b.HasIndex("PhoneNumber");
+
                     b.ToTable("Clients");
+                });
+
+            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Reminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ReminderAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VehicleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("VisitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReminderAtUtc");
+
+                    b.HasIndex("VehicleId");
+
+                    b.HasIndex("VisitId");
+
+                    b.ToTable("Reminders");
                 });
 
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Vehicle", b =>
@@ -211,6 +363,10 @@ namespace WerkonWebServicesRatchet.Migrations
 
                     b.HasIndex("ClientId");
 
+                    b.HasIndex("LicensePlate");
+
+                    b.HasIndex("Vin");
+
                     b.ToTable("Vehicles");
                 });
 
@@ -218,6 +374,9 @@ namespace WerkonWebServicesRatchet.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignedMechanicUserId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -244,7 +403,11 @@ namespace WerkonWebServicesRatchet.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssignedMechanicUserId");
+
                     b.HasIndex("VehicleId");
+
+                    b.HasIndex("VisitedAtUtc");
 
                     b.ToTable("Visits");
                 });
@@ -402,6 +565,24 @@ namespace WerkonWebServicesRatchet.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Reminder", b =>
+                {
+                    b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Vehicle", "Vehicle")
+                        .WithMany("Reminders")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Visit", "Visit")
+                        .WithMany()
+                        .HasForeignKey("VisitId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Vehicle");
+
+                    b.Navigation("Visit");
+                });
+
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Vehicle", b =>
                 {
                     b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Client", "Client")
@@ -415,6 +596,11 @@ namespace WerkonWebServicesRatchet.Migrations
 
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Visit", b =>
                 {
+                    b.HasOne("WerkonWebServicesRatchet.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedMechanicUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Vehicle", "Vehicle")
                         .WithMany("Visits")
                         .HasForeignKey("VehicleId")
@@ -442,6 +628,8 @@ namespace WerkonWebServicesRatchet.Migrations
 
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Vehicle", b =>
                 {
+                    b.Navigation("Reminders");
+
                     b.Navigation("Visits");
                 });
 

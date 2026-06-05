@@ -4,16 +4,21 @@ public interface ICircuitCookieAccessor
 {
     string ScopeKey { get; }
 
-    string? CircuitId { get; set; }
-
     string StorageKey { get; }
 }
 
 public sealed class CircuitCookieAccessor : ICircuitCookieAccessor
 {
-    public string ScopeKey { get; } = Guid.NewGuid().ToString("N");
+    public CircuitCookieAccessor(IHttpContextAccessor httpContextAccessor)
+    {
+        var sessionId = httpContextAccessor.HttpContext?.Request.Cookies[BrowserSessionCookie.CookieName];
 
-    public string? CircuitId { get; set; }
+        ScopeKey = string.IsNullOrWhiteSpace(sessionId)
+            ? Guid.NewGuid().ToString("N")
+            : sessionId;
+    }
 
-    public string StorageKey => CircuitId ?? ScopeKey;
+    public string ScopeKey { get; }
+
+    public string StorageKey => ScopeKey;
 }

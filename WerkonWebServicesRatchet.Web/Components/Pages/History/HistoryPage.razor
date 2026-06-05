@@ -1,0 +1,88 @@
+@page "/history"
+@attribute [RequireAdministrator]
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject AppTimeZone AppTimeZone
+
+<PageTitle>@L["History_Title"]</PageTitle>
+
+<h1>@L["History_Title"]</h1>
+<p class="form-text">@L["History_Description"]</p>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Items.Count == 0)
+{
+    <p>@L["History_Empty"]</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@L["History_DateTime"]</th>
+                <th>@L["History_User"]</th>
+                <th>@L["History_Action"]</th>
+                <th>@L["History_EntityType"]</th>
+                <th>@L["History_Record"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr>
+                    <td>@AppTimeZone.FromUtc(item.OccurredAtUtc).ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@item.UserDisplayName</td>
+                    <td>@L.GetAuditAction(item.Action)</td>
+                    <td>@L.GetAuditEntityType(item.EntityType)</td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(item.EntityUrl))
+                        {
+                            <a href="@item.EntityUrl">@item.Summary</a>
+                        }
+                        else
+                        {
+                            @item.Summary
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<AuditLogItemModel> Items { get; set; } = [];
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            Items = await ApiClient.GetAuditLogAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}

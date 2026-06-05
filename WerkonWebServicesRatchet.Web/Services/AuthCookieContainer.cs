@@ -16,14 +16,17 @@ public sealed class AuthCookieContainer
 
     public CookieContainer Cookies => _jar;
 
+    public string StorageKey => _accessor.StorageKey;
+
     public void RestoreFromStore()
     {
         if (!_store.TryGet(_accessor.StorageKey, out var stored))
         {
+            CookieContainerHelper.Clear(_jar);
             return;
         }
 
-        CookieContainerHelper.CopyCookies(stored, _jar);
+        CookieContainerHelper.ReplaceCookies(stored, _jar);
     }
 
     public void SaveToStore()
@@ -35,12 +38,7 @@ public sealed class AuthCookieContainer
     public void Clear()
     {
         CookieContainerHelper.Clear(_jar);
-        _store.Remove(_accessor.ScopeKey);
-
-        if (!string.IsNullOrEmpty(_accessor.CircuitId))
-        {
-            _store.Remove(_accessor.CircuitId);
-        }
+        _store.Remove(_accessor.StorageKey);
     }
 }
 

@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Domain.Entities;
+namespace WerkonWebServicesRatchet.Domain.Entities;
 
 public sealed class Visit
 {
@@ -6,6 +6,8 @@ public sealed class Visit
 
     public Guid VehicleId { get; set; }
     public Vehicle Vehicle { get; set; } = null!;
+
+    public Guid? AssignedMechanicUserId { get; set; }
 
     public DateTime VisitedAtUtc { get; set; }
     public int? MileageAtVisit { get; set; }

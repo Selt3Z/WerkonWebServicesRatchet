@@ -1,4 +1,4 @@
-﻿using WerkonWebServicesRatchet.Domain.Entities;
+using WerkonWebServicesRatchet.Domain.Entities;
 
 namespace WerkonWebServicesRatchet.Contracts.Visits;
 
@@ -10,6 +10,8 @@ public sealed class VisitResponse
     public int? MileageAtVisit { get; set; }
     public string CustomerComplaint { get; set; } = string.Empty;
     public string? MechanicComment { get; set; }
+    public Guid? AssignedMechanicUserId { get; set; }
+    public string? AssignedMechanicDisplayName { get; set; }
     public VisitStatus Status { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

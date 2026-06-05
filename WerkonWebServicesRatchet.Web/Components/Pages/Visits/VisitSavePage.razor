@@ -2,8 +2,10 @@
 @page "/visits/{Id:guid}/edit"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AppTimeZone AppTimeZone
 
 <PageTitle>@(IsEditMode ? L["Visit_EditTitle"] : L["Visit_New"])</PageTitle>
 
@@ -28,8 +30,8 @@ else
             <label class="form-label">@L["VisitDateTime"]</label>
             <input class="form-control"
                    type="datetime-local"
-                   @bind="Model.VisitedAtLocal"
-                   @bind:format="yyyy-MM-ddTHH:mm" />
+                   value="@VisitedAtLocalString"
+                   @oninput="OnVisitedAtInput" />
             <ValidationMessage For="() => Model.VisitedAtLocal" />
         </div>
 
@@ -68,6 +70,8 @@ else
     public Guid? Id { get; set; }
 
     private VisitSaveModel Model { get; set; } = new();
+    private string VisitedAtLocalString { get; set; } = string.Empty;
+    private bool IsCreateInitialized { get; set; }
     private bool IsLoading { get; set; }
     private bool IsSaving { get; set; }
     private string? ErrorMessage { get; set; }
@@ -80,7 +84,15 @@ else
 
         if (!IsEditMode)
         {
-            Model = new VisitSaveModel();
+            if (!IsCreateInitialized)
+            {
+                Model = new VisitSaveModel
+                {
+                    VisitedAtLocal = AppTimeZone.FromUtc(DateTime.UtcNow)
+                };
+                VisitedAtLocalString = ToDateTimeLocalString(Model.VisitedAtLocal);
+                IsCreateInitialized = true;
+            }
             return;
         }
 
@@ -96,15 +108,22 @@ else
                 return;
             }
 
+            if (visit.Status is VisitStatuses.Completed or VisitStatuses.Canceled)
+            {
+                NavigationManager.NavigateTo($"/visits/{Id!.Value}");
+                return;
+            }
+
             VehicleId = visit.VehicleId;
 
             Model = new VisitSaveModel
             {
-                VisitedAtLocal = visit.VisitedAtUtc.ToLocalTime(),
+                VisitedAtLocal = AppTimeZone.FromUtc(visit.VisitedAtUtc),
                 MileageAtVisit = visit.MileageAtVisit,
                 CustomerComplaint = visit.CustomerComplaint,
                 MechanicComment = visit.MechanicComment
             };
+            VisitedAtLocalString = ToDateTimeLocalString(Model.VisitedAtLocal);
         }
         catch (Exception ex)
         {
@@ -122,6 +141,14 @@ else
         {
             IsSaving = true;
             ErrorMessage = null;
+
+            if (!TryParseDateTimeLocal(VisitedAtLocalString, out var visitedAtLocal))
+            {
+                ErrorMessage = L["Validation_VisitDateRequired"];
+                return;
+            }
+
+            Model.VisitedAtLocal = visitedAtLocal;
 
             VisitListItem? savedVisit;
 
@@ -157,6 +184,29 @@ else
             IsSaving = false;
         }
     }
+
+    private void OnVisitedAtInput(ChangeEventArgs e)
+    {
+        VisitedAtLocalString = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private static bool TryParseDateTimeLocal(string value, out DateTime result)
+    {
+        if (DateTime.TryParse(value, out result))
+        {
+            return true;
+        }
+
+        return DateTime.TryParseExact(
+            value,
+            "yyyy-MM-ddTHH:mm",
+            provider: null,
+            System.Globalization.DateTimeStyles.None,
+            out result);
+    }
+
+    private static string ToDateTimeLocalString(DateTime? value) =>
+        value.HasValue ? value.Value.ToString("yyyy-MM-ddTHH:mm") : string.Empty;
 
     private void Cancel()
     {

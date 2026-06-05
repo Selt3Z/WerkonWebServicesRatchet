@@ -5,7 +5,7 @@ namespace WerkonWebServicesRatchet.Web.Models;
 public sealed class VisitSaveModel
 {
     [LocalizedRequired(MessageKey = "Validation_VisitDateRequired")]
-    public DateTime? VisitedAtLocal { get; set; } = DateTime.Now;
+    public DateTime? VisitedAtLocal { get; set; }
 
     [LocalizedRange(0, double.MaxValue, MessageKey = "Validation_MileageNegative")]
     public int? MileageAtVisit { get; set; }

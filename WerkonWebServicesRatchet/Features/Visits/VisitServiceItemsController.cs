@@ -9,6 +9,7 @@ using WerkonWebServicesRatchet.Infrastructure.Persistence;
 namespace WerkonWebServicesRatchet.Features.Visits;
 
 [ApiController]
+[Route("api/visits/{visitId:guid}/service-items")]
 [Authorize(Policy = AuthorizationPolicies.BusinessData)]
 public sealed class VisitServiceItemsController : ControllerBase
 {
@@ -19,7 +20,7 @@ public sealed class VisitServiceItemsController : ControllerBase
         _dbContext = dbContext;
     }
 
-    [HttpGet("api/visits/{visitId:guid}/service-items")]
+    [HttpGet]
     public async Task<ActionResult<List<VisitServiceItemResponse>>> GetByVisitId(
         Guid visitId,
         CancellationToken cancellationToken)
@@ -51,7 +52,7 @@ public sealed class VisitServiceItemsController : ControllerBase
         return Ok(response);
     }
 
-    [HttpPost("api/visits/{visitId:guid}/service-items")]
+    [HttpPost]
     public async Task<ActionResult<VisitServiceItemResponse>> Create(
         Guid visitId,
         SaveVisitServiceItemRequest request,
@@ -111,11 +112,11 @@ public sealed class VisitServiceItemsController : ControllerBase
             CreatedAtUtc = item.CreatedAtUtc
         };
 
-        return Ok(response);
+        return Created($"api/visits/{visitId}/service-items/{item.Id}", response);
     }
 
     [Authorize(Policy = AuthorizationPolicies.DeleteServiceItems)]
-    [HttpDelete("api/visits/{visitId:guid}/service-items/{itemId:guid}")]
+    [HttpDelete("{itemId:guid}")]
     public async Task<IActionResult> Delete(
     Guid visitId,
     Guid itemId,
