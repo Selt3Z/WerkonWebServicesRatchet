@@ -6,170 +6,289 @@ namespace WerkonWebServicesRatchet.Infrastructure.Pdf;
 
 public sealed class VisitWorkOrderPdfGenerator
 {
+    private static readonly Color BrandBlue = Color.FromHex("#2765A8");
+    private static readonly Color SoftGray = Color.FromHex("#F3F5F8");
+    private static readonly Color BorderGray = Color.FromHex("#C9D0D8");
+    private static readonly Color LabelGray = Color.FromHex("#5B6673");
+
     public byte[] Generate(VisitWorkOrderData data)
     {
         QuestPDF.Settings.License = LicenseType.Community;
+
+        var documentNumber = data.VisitNumber.ToString();
 
         return Document.Create(document =>
         {
             document.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(40);
-                page.DefaultTextStyle(style => style.FontSize(10).FontFamily("Arial"));
+                page.Margin(36);
+                page.DefaultTextStyle(style => style.FontSize(8.5f).FontFamily("Arial").FontColor(Colors.Black));
 
-                page.Content().Column(column =>
-                {
-                    column.Spacing(6);
-
-                    column.Item().Row(row =>
-                    {
-                        row.RelativeItem().Column(left =>
-                        {
-                            left.Spacing(4);
-                            left.Item().Text("ЗАКАЗ-НАРЯД").Bold().FontSize(18);
-                            left.Item().Text($"№ {data.VisitId.ToString()[..8].ToUpper()}");
-                            left.Item().Text($"Дата: {data.VisitedAtLocal:dd.MM.yyyy HH:mm}");
-                        });
-
-                        if (data.Organization.LogoBytes is { Length: > 0 })
-                        {
-                            row.ConstantItem(120).AlignRight().Height(60).Image(data.Organization.LogoBytes).FitArea();
-                        }
-                    });
-
-                    column.Item().PaddingTop(8).Text("Исполнитель").Bold().FontSize(11);
-                    AppendOrganizationBlock(column, data.Organization);
-
-                    column.Item().PaddingTop(8).LineHorizontal(1);
-
-                    column.Item().PaddingTop(4).Text("Заказчик").Bold().FontSize(11);
-                    column.Item().Text($"ФИО / организация: {data.ClientFullName}");
-                    column.Item().Text($"Телефон: {data.ClientPhoneNumber}");
-
-                    column.Item().PaddingTop(8).Text("Автомобиль").Bold().FontSize(11);
-                    column.Item().Text($"Марка / модель: {data.VehicleBrand} {data.VehicleModel}");
-                    column.Item().Text($"Госномер: {data.LicensePlate}");
-
-                    if (!string.IsNullOrWhiteSpace(data.Vin))
-                    {
-                        column.Item().Text($"VIN: {data.Vin}");
-                    }
-
-                    if (data.MileageAtVisit.HasValue)
-                    {
-                        column.Item().Text($"Пробег: {data.MileageAtVisit.Value}");
-                    }
-
-                    column.Item().Text($"Жалоба / причина обращения: {data.CustomerComplaint}");
-
-                    if (!string.IsNullOrWhiteSpace(data.AssignedMechanicDisplayName))
-                    {
-                        column.Item().Text($"Ответственный мастер: {data.AssignedMechanicDisplayName}");
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(data.MechanicComment))
-                    {
-                        column.Item().Text($"Комментарий мастера: {data.MechanicComment}");
-                    }
-
-                    column.Item().PaddingTop(12).Text("Выполненные работы").Bold().FontSize(12);
-
-                    if (data.Items.Count == 0)
-                    {
-                        column.Item().Text("Работы не указаны.");
-                    }
-                    else
-                    {
-                        column.Item().Table(table =>
-                        {
-                            table.ColumnsDefinition(columns =>
-                            {
-                                columns.RelativeColumn(4);
-                                columns.RelativeColumn(1);
-                                columns.RelativeColumn(1.5f);
-                                columns.RelativeColumn(1.5f);
-                            });
-
-                            table.Header(header =>
-                            {
-                                header.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text("Наименование").Bold();
-                                header.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text("Кол-во").Bold();
-                                header.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text("Цена").Bold();
-                                header.Cell().Background(Colors.Grey.Lighten3).Padding(4).AlignRight().Text("Сумма").Bold();
-                            });
-
-                            foreach (var item in data.Items)
-                            {
-                                table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(item.Name);
-                                table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(item.Quantity.ToString("0.##"));
-                                table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(item.UnitPrice.ToString("0.00"));
-                                table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).AlignRight().Text(item.TotalPrice.ToString("0.00"));
-                            }
-                        });
-                    }
-
-                    column.Item().PaddingTop(12).AlignRight().Text($"ИТОГО: {data.TotalAmount:0.00}").Bold().FontSize(13);
-
-                    if (HasBankDetails(data.Organization))
-                    {
-                        column.Item().PaddingTop(12).Text("Платёжные реквизиты").Bold().FontSize(11);
-                        AppendBankDetails(column, data.Organization);
-                    }
-                });
-
-                page.Footer()
-                    .AlignCenter()
-                    .Text(text =>
-                    {
-                        text.Span(data.Organization.OrganizationName);
-                        text.Span(" · ");
-                        text.Span(DateTime.Now.ToString("dd.MM.yyyy HH:mm"));
-                    });
+                page.Header().Element(header => ComposeHeader(header, data, documentNumber));
+                page.Content().Element(content => ComposeContent(content, data));
+                page.Footer().Element(footer => ComposeFooter(footer, data));
             });
         }).GeneratePdf();
     }
 
-    private static void AppendOrganizationBlock(ColumnDescriptor column, OrganizationDocumentInfo organization)
+    private static void ComposeHeader(IContainer container, VisitWorkOrderData data, string documentNumber)
     {
-        if (!string.IsNullOrWhiteSpace(organization.OrganizationName))
+        container.Column(column =>
         {
-            column.Item().Text(organization.OrganizationName);
+            column.Item().Row(row =>
+            {
+                row.RelativeItem().Column(left =>
+                {
+                    if (!string.IsNullOrWhiteSpace(data.Organization.OrganizationName))
+                    {
+                        left.Item().Text(data.Organization.OrganizationName).Bold().FontSize(11).FontColor(BrandBlue);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(data.Organization.Address))
+                    {
+                        left.Item().PaddingTop(2).Text(data.Organization.Address).FontSize(7.5f).FontColor(LabelGray);
+                    }
+
+                    var contacts = BuildContactLine(data.Organization);
+                    if (!string.IsNullOrWhiteSpace(contacts))
+                    {
+                        left.Item().Text(contacts).FontSize(7.5f).FontColor(LabelGray);
+                    }
+
+                    var taxLine = BuildTaxLine(data.Organization);
+                    if (!string.IsNullOrWhiteSpace(taxLine))
+                    {
+                        left.Item().PaddingTop(2).Text(taxLine).FontSize(7).FontColor(LabelGray);
+                    }
+                });
+
+                if (data.Organization.LogoBytes is { Length: > 0 })
+                {
+                    row.ConstantItem(96).AlignRight().AlignMiddle().Height(46).Image(data.Organization.LogoBytes).FitArea();
+                }
+            });
+
+            column.Item().PaddingTop(8).LineHorizontal(1.2f).LineColor(BrandBlue);
+
+            column.Item().PaddingTop(8).Row(row =>
+            {
+                row.RelativeItem().AlignMiddle().Text("ЗАКАЗ-НАРЯД").Bold().FontSize(13).FontColor(BrandBlue);
+                row.ConstantItem(180).AlignRight().Column(meta =>
+                {
+                    meta.Item().Text($"№ {documentNumber}").Bold().FontSize(9);
+                    meta.Item().Text($"Дата: {data.VisitedAtLocal:dd.MM.yyyy HH:mm}").FontSize(8);
+                });
+            });
+        });
+    }
+
+    private static void ComposeContent(IContainer container, VisitWorkOrderData data)
+    {
+        container.PaddingTop(10).Column(column =>
+        {
+            column.Spacing(8);
+
+            column.Item().Row(row =>
+            {
+                row.RelativeItem().Element(c => ComposeInfoCard(c, "Заказчик",
+                [
+                    ("ФИО / организация", data.ClientFullName),
+                    ("Телефон", data.ClientPhoneNumber)
+                ]));
+
+                row.ConstantItem(10);
+
+                row.RelativeItem().Element(c => ComposeInfoCard(c, "Автомобиль",
+                [
+                    ("Марка / модель", $"{data.VehicleBrand} {data.VehicleModel}".Trim()),
+                    ("Госномер", data.LicensePlate),
+                    ("VIN", data.Vin),
+                    ("Пробег", data.MileageAtVisit?.ToString())
+                ]));
+            });
+
+            column.Item().Element(c => ComposeInfoCard(c, "Обращение",
+            [
+                ("Жалоба / причина", data.CustomerComplaint),
+                ("Ответственный мастер", data.AssignedMechanicDisplayName),
+                ("Комментарий мастера", data.MechanicComment)
+            ]));
+
+            column.Item().Text("Выполненные работы").Bold().FontSize(9.5f).FontColor(BrandBlue);
+
+            column.Item().Element(c => ComposeWorksTable(c, data));
+
+            column.Item().AlignRight().Background(SoftGray).Border(1).BorderColor(BorderGray).Padding(6).Width(200)
+                .Row(row =>
+                {
+                    row.RelativeItem().Text("ИТОГО").Bold().FontSize(9);
+                    row.ConstantItem(80).AlignRight().Text($"{data.TotalAmount:0.00}").Bold().FontSize(10).FontColor(BrandBlue);
+                });
+
+            if (HasBankDetails(data.Organization))
+            {
+                column.Item().Element(c => ComposeInfoCard(c, "Платёжные реквизиты",
+                [
+                    ("Расчётный счёт", data.Organization.BankAccount),
+                    ("БИК", data.Organization.Bik)
+                ]));
+            }
+
+            column.Item().PaddingTop(14).Row(row =>
+            {
+                row.RelativeItem().Element(c => ComposeSignatureBlock(c, "Исполнитель"));
+                row.ConstantItem(20);
+                row.RelativeItem().Element(c => ComposeSignatureBlock(c, "Заказчик"));
+            });
+        });
+    }
+
+    private static void ComposeWorksTable(IContainer container, VisitWorkOrderData data)
+    {
+        container.DefaultTextStyle(style => style.FontSize(8)).Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.ConstantColumn(24);
+                columns.RelativeColumn(4.2f);
+                columns.RelativeColumn(1.1f);
+                columns.RelativeColumn(1.4f);
+                columns.RelativeColumn(1.4f);
+            });
+
+            table.Header(header =>
+            {
+                header.Cell().Element(HeaderCell).AlignCenter().Text("№").Bold().FontSize(7.5f);
+                header.Cell().Element(HeaderCell).Text("Наименование").Bold().FontSize(7.5f);
+                header.Cell().Element(HeaderCell).AlignCenter().Text("Кол-во").Bold().FontSize(7.5f);
+                header.Cell().Element(HeaderCell).AlignRight().Text("Цена").Bold().FontSize(7.5f);
+                header.Cell().Element(HeaderCell).AlignRight().Text("Сумма").Bold().FontSize(7.5f);
+            });
+
+            if (data.Items.Count == 0)
+            {
+                table.Cell().ColumnSpan(5).Element(BodyCell).Padding(6).Text("Работы не указаны.").FontSize(8).FontColor(LabelGray);
+                return;
+            }
+
+            var index = 1;
+            foreach (var item in data.Items)
+            {
+                table.Cell().Element(BodyCell).AlignCenter().Text(index.ToString()).FontSize(8);
+                table.Cell().Element(BodyCell).Column(name =>
+                {
+                    name.Item().Text(item.Name).FontSize(8);
+                    if (!string.IsNullOrWhiteSpace(item.Comment))
+                    {
+                        name.Item().Text(item.Comment).FontSize(7).FontColor(LabelGray);
+                    }
+                });
+                table.Cell().Element(BodyCell).AlignCenter().Text(item.Quantity.ToString("0.##")).FontSize(8);
+                table.Cell().Element(BodyCell).AlignRight().Text(item.UnitPrice.ToString("0.00")).FontSize(8);
+                table.Cell().Element(BodyCell).AlignRight().Text(item.TotalPrice.ToString("0.00")).FontSize(8);
+                index++;
+            }
+        });
+    }
+
+    private static void ComposeInfoCard(IContainer container, string title, (string Label, string? Value)[] fields)
+    {
+        var visible = fields
+            .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+            .ToArray();
+
+        if (visible.Length == 0)
+        {
+            container.Border(1).BorderColor(BorderGray).Background(Colors.White).Padding(7).Column(column =>
+            {
+                column.Item().Text(title).Bold().FontSize(8.5f).FontColor(BrandBlue);
+                column.Item().PaddingTop(3).Text("—").FontSize(8).FontColor(LabelGray);
+            });
+            return;
         }
 
-        if (!string.IsNullOrWhiteSpace(organization.Address))
+        container.Border(1).BorderColor(BorderGray).Background(Colors.White).Padding(7).Column(column =>
         {
-            column.Item().Text($"Адрес: {organization.Address}");
-        }
+            column.Item().Text(title).Bold().FontSize(8.5f).FontColor(BrandBlue);
+            column.Item().PaddingTop(4).Column(body =>
+            {
+                body.Spacing(3);
+                foreach (var field in visible)
+                {
+                    body.Item().Row(row =>
+                    {
+                        row.ConstantItem(108).Text(field.Label).FontSize(7).FontColor(LabelGray);
+                        row.RelativeItem().Text(field.Value!).FontSize(8);
+                    });
+                }
+            });
+        });
+    }
 
-        var taxLine = BuildTaxLine(organization);
-        if (!string.IsNullOrWhiteSpace(taxLine))
+    private static void ComposeSignatureBlock(IContainer container, string title)
+    {
+        container.Column(column =>
         {
-            column.Item().Text(taxLine);
-        }
+            column.Item().Text(title).Bold().FontSize(8).FontColor(LabelGray);
+            column.Item().PaddingTop(18).Row(row =>
+            {
+                row.RelativeItem().BorderBottom(1).BorderColor(BorderGray).Height(1);
+                row.ConstantItem(8);
+                row.ConstantItem(80).BorderBottom(1).BorderColor(BorderGray).Height(1);
+            });
+            column.Item().PaddingTop(2).Row(row =>
+            {
+                row.RelativeItem().Text("подпись").FontSize(6).FontColor(LabelGray);
+                row.ConstantItem(8);
+                row.ConstantItem(80).AlignCenter().Text("расшифровка").FontSize(6).FontColor(LabelGray);
+            });
+        });
+    }
+
+    private static void ComposeFooter(IContainer container, VisitWorkOrderData data)
+    {
+        container.PaddingTop(6).Column(column =>
+        {
+            column.Item().LineHorizontal(0.7f).LineColor(BorderGray);
+            column.Item().PaddingTop(5).AlignCenter().Text(text =>
+            {
+                var orgName = string.IsNullOrWhiteSpace(data.Organization.OrganizationName)
+                    ? "WWS Ratchet"
+                    : data.Organization.OrganizationName;
+
+                text.Span(orgName).FontSize(7).FontColor(LabelGray);
+                text.Span("  ·  ").FontSize(7).FontColor(LabelGray);
+                text.Span($"сформировано {DateTime.Now:dd.MM.yyyy HH:mm}").FontSize(7).FontColor(LabelGray);
+                text.Span("  ·  ").FontSize(7).FontColor(LabelGray);
+                text.CurrentPageNumber().FontSize(7).FontColor(LabelGray);
+                text.Span(" / ").FontSize(7).FontColor(LabelGray);
+                text.TotalPages().FontSize(7).FontColor(LabelGray);
+            });
+        });
+    }
+
+    private static IContainer HeaderCell(IContainer container) =>
+        container.Background(SoftGray).Border(1).BorderColor(BorderGray).PaddingVertical(3).PaddingHorizontal(4);
+
+    private static IContainer BodyCell(IContainer container) =>
+        container.Border(1).BorderColor(BorderGray).PaddingVertical(3).PaddingHorizontal(4).AlignMiddle();
+
+    private static string BuildContactLine(OrganizationDocumentInfo organization)
+    {
+        var parts = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(organization.Phone))
         {
-            column.Item().Text($"Телефон: {organization.Phone}");
+            parts.Add($"тел. {organization.Phone}");
         }
 
         if (!string.IsNullOrWhiteSpace(organization.Email))
         {
-            column.Item().Text($"Email: {organization.Email}");
-        }
-    }
-
-    private static void AppendBankDetails(ColumnDescriptor column, OrganizationDocumentInfo organization)
-    {
-        if (!string.IsNullOrWhiteSpace(organization.BankAccount))
-        {
-            column.Item().Text($"Расчётный счёт: {organization.BankAccount}");
+            parts.Add(organization.Email);
         }
 
-        if (!string.IsNullOrWhiteSpace(organization.Bik))
-        {
-            column.Item().Text($"БИК: {organization.Bik}");
-        }
+        return string.Join("  ·  ", parts);
     }
 
     private static string BuildTaxLine(OrganizationDocumentInfo organization)
@@ -178,20 +297,20 @@ public sealed class VisitWorkOrderPdfGenerator
 
         if (!string.IsNullOrWhiteSpace(organization.Inn))
         {
-            parts.Add($"ИНН: {organization.Inn}");
+            parts.Add($"ИНН {organization.Inn}");
         }
 
         if (!string.IsNullOrWhiteSpace(organization.Kpp))
         {
-            parts.Add($"КПП: {organization.Kpp}");
+            parts.Add($"КПП {organization.Kpp}");
         }
 
         if (!string.IsNullOrWhiteSpace(organization.Ogrn))
         {
-            parts.Add($"ОГРН: {organization.Ogrn}");
+            parts.Add($"ОГРН {organization.Ogrn}");
         }
 
-        return parts.Count == 0 ? string.Empty : string.Join("   ", parts);
+        return string.Join("   ", parts);
     }
 
     private static bool HasBankDetails(OrganizationDocumentInfo organization) =>

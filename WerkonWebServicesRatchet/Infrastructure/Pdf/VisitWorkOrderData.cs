@@ -6,6 +6,8 @@ public sealed class VisitWorkOrderData
 
     public Guid VisitId { get; init; }
 
+    public long VisitNumber { get; init; }
+
     public DateTime VisitedAtLocal { get; init; }
 
     public string ClientFullName { get; init; } = string.Empty;

@@ -4,22 +4,24 @@
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MoneyFormatService MoneyFormat
+@inject AppPreferencesService AppPreferences
 
 <PageTitle>@L["ServiceCatalog_Title"]</PageTitle>
 
 <h1>@L["ServiceCatalog_Title"]</h1>
 
-<div class="row g-3 mb-3 catalog-services-filters">
-    <div class="col-md-4">
-        <label class="form-label">@L["Search"]</label>
-        <input class="form-control" @bind="SearchFilter" @bind:event="oninput" />
+<div class="list-filters catalog-services-filters mb-3">
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="catalog-search-filter">@L["Search"]</label>
+        <input id="catalog-search-filter" class="form-control" @bind="SearchFilter" @bind:event="oninput" />
     </div>
 </div>
 
-<div class="mb-3">
+<div class="action-bar mb-3">
     <button class="btn btn-primary me-2" @onclick="LoadServicesAsync">@L["Search"]</button>
     <button class="btn btn-secondary me-2" @onclick="ClearFilters">@L["Clear"]</button>
-    @if (CanManageCatalog)
+    @if (CanAddCatalog)
     {
         <button class="btn btn-success" @onclick="OpenNewService">@L["ServiceCatalog_Add"]</button>
     }
@@ -57,24 +59,26 @@ else
         <tbody>
             @foreach (var service in Services)
             {
-                <tr>
+                <tr class="@(CanManageCatalog ? "table-row-action" : "")"
+                    @onclick="() => HandleServiceRowClick(service.Id)">
                     <td>@service.Name</td>
                     <td>@(service.Code ?? "—")</td>
                     <td>@(service.Category ?? "—")</td>
-                    <td>@service.DefaultUnitPrice.ToString("0.##")</td>
+                    <td>@MoneyFormat.Format(service.DefaultUnitPrice)</td>
                     <td>@service.DefaultUnit</td>
                     <td>@(service.IsActive ? L["ServiceCatalog_Active"] : L["ServiceCatalog_Inactive"])</td>
                     @if (CanManageCatalog)
                     {
-                        <td class="text-end text-nowrap">
-                            <button class="btn btn-sm btn-outline-primary me-1"
-                                    @onclick="() => EditService(service.Id)">
-                                @L["Edit"]
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger"
+                        <td class="text-end text-nowrap table-row-actions" @onclick:stopPropagation="true">
+                            <button type="button"
+                                    class="btn-icon-delete"
                                     disabled="@IsDeleting"
+                                    title="@L["Delete"]"
+                                    aria-label="@L["Delete"]"
                                     @onclick="() => DeleteServiceAsync(service.Id)">
-                                @L["Delete"]
+                                <svg class="btn-icon-delete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+                                </svg>
                             </button>
                         </td>
                     }
@@ -82,20 +86,31 @@ else
             }
         </tbody>
     </table>
+
+    <InfiniteScroll HasMore="HasMore" IsLoading="IsLoadingMore" OnLoadMore="LoadMoreAsync" />
 }
 
 @code {
     private List<CatalogServiceListItem> Services { get; set; } = [];
     private string? SearchFilter { get; set; }
     private bool CanManageCatalog { get; set; }
+    private bool CanAddCatalog { get; set; }
+    private int PageSize => AppPreferences.ListPageSize;
     private bool IsLoading { get; set; }
+    private bool IsLoadingMore { get; set; }
+    private bool HasMore { get; set; }
     private bool IsDeleting { get; set; }
     private string? ErrorMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        CanManageCatalog = authState.User.IsInRole("Administrator") || authState.User.IsInRole("Manager");
+        var isAdminOrManager = authState.User.IsInRole("Administrator") || authState.User.IsInRole("Manager");
+        CanManageCatalog = isAdminOrManager;
+
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+        CanAddCatalog = isAdminOrManager
+            || (authState.User.IsInRole("Mechanic") && AppPreferences.MechanicCanAddCatalogServices);
 
         await LoadServicesAsync();
     }
@@ -106,7 +121,10 @@ else
         {
             IsLoading = true;
             ErrorMessage = null;
-            Services = await ApiClient.GetCatalogServicesAsync(SearchFilter);
+
+            var page = await ApiClient.GetCatalogServicesAsync(SearchFilter, skip: 0, take: PageSize);
+            Services = page.Items;
+            HasMore = page.HasMore;
         }
         catch (Exception ex)
         {
@@ -115,6 +133,31 @@ else
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || !HasMore)
+        {
+            return;
+        }
+
+        try
+        {
+            IsLoadingMore = true;
+
+            var page = await ApiClient.GetCatalogServicesAsync(SearchFilter, skip: Services.Count, take: PageSize);
+            Services.AddRange(page.Items);
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingMore = false;
         }
     }
 
@@ -132,6 +175,16 @@ else
     private void EditService(Guid serviceId)
     {
         NavigationManager.NavigateTo($"/catalog-services/{serviceId}/edit");
+    }
+
+    private void HandleServiceRowClick(Guid serviceId)
+    {
+        if (!CanManageCatalog)
+        {
+            return;
+        }
+
+        EditService(serviceId);
     }
 
     private async Task DeleteServiceAsync(Guid serviceId)

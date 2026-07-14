@@ -1,110 +1,99 @@
-.page {
-
-    position: relative;
-
+.app-shell {
     display: flex;
-
-    flex-direction: column;
-
     min-height: 100vh;
-
+    background: var(--r-bg);
 }
 
-
-
-.page-body {
-
+.app-frame {
+    flex: 1;
     display: flex;
-
-    flex: 1;
-
     flex-direction: column;
-
+    min-width: 0;
+    min-height: 100vh;
 }
 
-
-
-main {
-
+.app-workspace {
     flex: 1;
-
+    padding: 14px 16px 20px;
+    overflow: auto;
+    background-color: var(--r-bg);
+    background-image:
+        linear-gradient(var(--r-grid-line, rgba(0, 0, 0, 0.03)) 1px, transparent 1px),
+        linear-gradient(90deg, var(--r-grid-line, rgba(0, 0, 0, 0.03)) 1px, transparent 1px);
+    background-size: 20px 20px;
 }
 
-
-
-.sidebar {
-
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
-
+.app-workspace-well {
+    min-height: calc(100vh - var(--r-titlebar-h) - 34px);
+    background: var(--r-surface);
+    border: 1px solid var(--r-border);
+    border-top-color: var(--r-chrome-highlight);
+    border-radius: 6px 6px 10px 10px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.55),
+        0 2px 8px rgba(15, 23, 42, 0.07);
+    position: relative;
 }
 
-
-
-@media (min-width: 641px) {
-
-    .page-body {
-
-        flex-direction: row;
-
-    }
-
-
-
-    .sidebar {
-
-        width: 185px;
-
-        position: sticky;
-
-        top: 62px;
-
-        align-self: flex-start;
-
-        height: calc(100vh - 62px);
-
-    }
-
+.app-workspace-well::before,
+.app-workspace-well::after {
+    content: "┌";
+    position: absolute;
+    top: 6px;
+    font-family: "MS Gothic", "Yu Gothic", monospace;
+    font-size: 0.7rem;
+    color: var(--r-brand);
+    opacity: 0.28;
+    pointer-events: none;
+    line-height: 1;
 }
 
+.app-workspace-well::before {
+    left: 8px;
+}
 
+.app-workspace-well::after {
+    content: "┐";
+    right: 8px;
+}
+
+[data-theme="dark"] .app-workspace-well {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 4px 20px rgba(0, 0, 0, 0.35);
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
 
 #blazor-error-ui {
-
     color-scheme: light only;
-
-    background: lightyellow;
-
     bottom: 0;
-
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
-
+    box-shadow: var(--r-shadow-lg);
     box-sizing: border-box;
-
     display: none;
-
     left: 0;
-
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
-
+    padding: 0.75rem 1.25rem;
     position: fixed;
-
     width: 100%;
-
     z-index: 1000;
-
 }
 
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
 
-
-    #blazor-error-ui .dismiss {
-
-        cursor: pointer;
-
-        position: absolute;
-
-        right: 0.75rem;
-
-        top: 0.5rem;
-
+@media (max-width: 640.98px) {
+    .app-shell {
+        flex-direction: column;
     }
 
+    .app-frame {
+        width: 100%;
+    }
+
+    .app-workspace {
+        padding: 10px 10px 16px;
+    }
+}

@@ -1,0 +1,67 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (HasMore)
+{
+    <div @ref="_sentinel" class="infinite-scroll-sentinel text-center py-2">
+        @if (IsLoading)
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="ms-2">@L["Loading"]</span>
+        }
+    </div>
+}
+
+@code {
+    private ElementReference _sentinel;
+    private DotNetObjectReference<InfiniteScroll>? _dotNetRef;
+    private readonly string _observerId = Guid.NewGuid().ToString("N");
+    private bool _observing;
+
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public EventCallback OnLoadMore { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (HasMore)
+        {
+            // Re-observe after every render: the initial IntersectionObserver callback
+            // fires immediately, so if the sentinel is still in view after a chunk
+            // was appended, the next chunk loads without any scroll event.
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("ratchetInfiniteScroll.observe", _sentinel, _dotNetRef, _observerId);
+            _observing = true;
+        }
+        else if (_observing)
+        {
+            await JS.InvokeVoidAsync("ratchetInfiniteScroll.unobserve", _observerId);
+            _observing = false;
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnSentinelVisible()
+    {
+        if (HasMore && !IsLoading)
+        {
+            await OnLoadMore.InvokeAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_observing)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("ratchetInfiniteScroll.unobserve", _observerId);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _dotNetRef?.Dispose();
+    }
+}

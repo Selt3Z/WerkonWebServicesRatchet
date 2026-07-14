@@ -1,9 +1,11 @@
 @page "/history"
-@attribute [RequireAdministrator]
+@attribute [RequireManagerOrAdministrator]
+@using WerkonWebServicesRatchet.Web.Authorization
 @using WerkonWebServicesRatchet.Web.Models
 @using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject AppTimeZone AppTimeZone
+@inject AppPreferencesService AppPreferences
 
 <PageTitle>@L["History_Title"]</PageTitle>
 
@@ -56,15 +58,21 @@ else
             }
         </tbody>
     </table>
+
+    <InfiniteScroll HasMore="HasMore" IsLoading="IsLoadingMore" OnLoadMore="LoadMoreAsync" />
 }
 
 @code {
     private List<AuditLogItemModel> Items { get; set; } = [];
+    private int PageSize => AppPreferences.ListPageSize;
     private bool IsLoading { get; set; } = true;
+    private bool IsLoadingMore { get; set; }
+    private bool HasMore { get; set; }
     private string? ErrorMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
         await LoadAsync();
     }
 
@@ -74,7 +82,10 @@ else
         {
             IsLoading = true;
             ErrorMessage = null;
-            Items = await ApiClient.GetAuditLogAsync();
+
+            var page = await ApiClient.GetAuditLogAsync(skip: 0, take: PageSize);
+            Items = page.Items;
+            HasMore = page.HasMore;
         }
         catch (Exception ex)
         {
@@ -83,6 +94,31 @@ else
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || !HasMore)
+        {
+            return;
+        }
+
+        try
+        {
+            IsLoadingMore = true;
+
+            var page = await ApiClient.GetAuditLogAsync(skip: Items.Count, take: PageSize);
+            Items.AddRange(page.Items);
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingMore = false;
         }
     }
 }

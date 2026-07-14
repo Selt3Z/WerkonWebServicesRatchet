@@ -2,6 +2,7 @@
 @inject RatchetApiClient ApiClient
 @inject AppTimeZone AppTimeZone
 @inject ThemeService ThemeService
+@inject AppPreferencesService AppPreferences
 
 @code {
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -19,6 +20,8 @@
             {
                 return;
             }
+
+            AppPreferences.Apply(settings);
 
             if (!string.IsNullOrWhiteSpace(settings.TimeZoneId))
             {

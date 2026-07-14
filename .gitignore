@@ -255,7 +255,7 @@ Generated_Code/
 # to a newer Visual Studio version. Backup files are not needed,
 # because we have git ;-)
 _UpgradeReport_Files/
-Backup*/
+# Do NOT use Backup*/ here: it also matches docker/backup and Infrastructure/Backups.
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/
@@ -363,3 +363,11 @@ MigrationBackup/
 FodyWeavers.xsd
 /WerkonWebServicesRatchet/AGENTS.md
 /WerkonWebServicesRatchet/AGENT_TASK_STYLE.md
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# Database backups
+/backups/

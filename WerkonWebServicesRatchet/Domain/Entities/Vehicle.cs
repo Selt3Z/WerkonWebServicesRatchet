@@ -16,5 +16,8 @@ public sealed class Vehicle
     public List<Visit> Visits { get; set; } = [];
     public List<Reminder> Reminders { get; set; } = [];
 
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAtUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 }

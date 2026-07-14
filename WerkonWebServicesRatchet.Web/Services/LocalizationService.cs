@@ -49,6 +49,8 @@ public sealed class LocalizationService
         "Created" => Get("History_Action_Created"),
         "Updated" => Get("History_Action_Updated"),
         "Deleted" => Get("History_Action_Deleted"),
+        "Archived" => Get("History_Action_Archived"),
+        "Restored" => Get("History_Action_Restored"),
         _ => action
     };
 

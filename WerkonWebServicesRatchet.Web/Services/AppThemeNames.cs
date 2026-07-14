@@ -1,0 +1,31 @@
+namespace WerkonWebServicesRatchet.Web.Services;
+
+public static class AppThemeNames
+{
+    public const string Light = "light";
+
+    public const string Dark = "dark";
+
+    public const string Gray = "gray";
+
+    public const string GrayRetro = "gray-retro";
+
+    public const string Pink = "pink";
+
+    public static string Normalize(string? theme)
+    {
+        if (string.IsNullOrWhiteSpace(theme))
+        {
+            return Light;
+        }
+
+        return theme.Trim().ToLowerInvariant() switch
+        {
+            Dark => Dark,
+            Gray => Gray,
+            "grayretro" or GrayRetro => GrayRetro,
+            Pink => Pink,
+            _ => Light
+        };
+    }
+}

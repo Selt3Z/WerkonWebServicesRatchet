@@ -1,9 +1,11 @@
 @page "/settings"
 @attribute [RequireAdministrator]
+@using WerkonWebServicesRatchet.Web.Models
 @using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject AppTimeZone AppTimeZone
 @inject ThemeService ThemeService
+@inject AppPreferencesService AppPreferences
 @inject NavigationManager NavigationManager
 
 <PageTitle>@L["Settings_Title"]</PageTitle>
@@ -26,34 +28,107 @@ else
         <div class="alert alert-success">@SuccessMessage</div>
     }
 
-    <EditForm Model="_formModel" FormName="settings-form" OnValidSubmit="SaveAsync">
-        <div class="mb-3 settings-timezone-field">
-            <label class="form-label">@L["Settings_TimeZone"]</label>
-            <InputSelect class="form-select" @bind-Value="_formModel.TimeZoneId">
-                @foreach (var timeZone in AvailableTimeZones)
-                {
-                    <option value="@timeZone.Id">@timeZone.DisplayName (@timeZone.Id)</option>
-                }
-            </InputSelect>
-            <div class="form-text">@L["Settings_TimeZone_Help"]</div>
+    <EditForm class="settings-form settings-form-split" Model="_formModel" FormName="settings-form" OnValidSubmit="SaveAsync">
+        <div class="settings-form-columns">
+            <section class="settings-form-panel">
+                <div class="settings-field">
+                    <label class="form-label">@L["Settings_TimeZone"]</label>
+                    <InputSelect class="form-select" @bind-Value="_formModel.TimeZoneId">
+                        @foreach (var timeZone in AvailableTimeZones)
+                        {
+                            <option value="@timeZone.Id">@timeZone.DisplayName (@timeZone.Id)</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">@L["Settings_TimeZone_Help"]</div>
+                </div>
+
+                <div class="settings-field">
+                    <label class="form-label">@L["Settings_Theme"]</label>
+                    <InputSelect class="form-select" @bind-Value="_formModel.Theme">
+                        <option value="light">@L["Settings_Theme_Light"]</option>
+                        <option value="dark">@L["Settings_Theme_Dark"]</option>
+                        <option value="gray">@L["Settings_Theme_Gray"]</option>
+                        <option value="gray-retro">@L["Settings_Theme_GrayRetro"]</option>
+                        <option value="pink">@L["Settings_Theme_Pink"]</option>
+                    </InputSelect>
+                    <div class="form-text">@L["Settings_Theme_Help"]</div>
+                </div>
+
+                <div class="settings-field">
+                    <label class="form-label">@L["Settings_Currency"]</label>
+                    <InputSelect class="form-select" @bind-Value="_formModel.CurrencyCode">
+                        <option value="RUB">@L["Settings_Currency_RUB"]</option>
+                        <option value="USD">@L["Settings_Currency_USD"]</option>
+                        <option value="EUR">@L["Settings_Currency_EUR"]</option>
+                    </InputSelect>
+                    <div class="form-text">@L["Settings_Currency_Help"]</div>
+                </div>
+            </section>
+
+            <section class="settings-form-panel">
+                <div class="settings-field">
+                    <label class="form-label">@L["Settings_DefaultVisitStatus"]</label>
+                    <InputSelect class="form-select" @bind-Value="_formModel.DefaultVisitStatus">
+                        <option value="Created">@L.GetVisitStatus(VisitStatuses.Created)</option>
+                        <option value="InProgress">@L.GetVisitStatus(VisitStatuses.InProgress)</option>
+                    </InputSelect>
+                    <div class="form-text">@L["Settings_DefaultVisitStatus_Help"]</div>
+                </div>
+
+                <div class="settings-field settings-field-inline-pair">
+                    <div class="settings-field">
+                        <label class="form-label">@L["Settings_ReminderLookbackDays"]</label>
+                        <InputNumber class="form-control" @bind-Value="_formModel.ReminderLookbackDays" min="1" max="90" />
+                        <div class="form-text">@L["Settings_ReminderLookbackDays_Help"]</div>
+                    </div>
+                    <div class="settings-field">
+                        <label class="form-label">@L["Settings_ListPageSize"]</label>
+                        <InputNumber class="form-control" @bind-Value="_formModel.ListPageSize" min="10" max="100" />
+                        <div class="form-text">@L["Settings_ListPageSize_Help"]</div>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label class="form-label">@L["Settings_AuditRetentionDays"]</label>
+                    <InputNumber class="form-control" @bind-Value="_formModel.AuditRetentionDays" min="7" max="3650" />
+                    <div class="form-text">@L["Settings_AuditRetentionDays_Help"]</div>
+                </div>
+
+                <div class="settings-field settings-field-check">
+                    <div class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="_formModel.HideArchivedByDefault" id="hideArchivedByDefault" />
+                        <label class="form-check-label" for="hideArchivedByDefault">@L["Settings_HideArchivedByDefault"]</label>
+                    </div>
+                    <div class="form-text">@L["Settings_HideArchivedByDefault_Help"]</div>
+                </div>
+
+                <div class="settings-field settings-field-check">
+                    <div class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="_formModel.ManagerCanHardDelete" id="managerCanHardDelete" />
+                        <label class="form-check-label" for="managerCanHardDelete">@L["Settings_ManagerCanHardDelete"]</label>
+                    </div>
+                    <div class="form-text">@L["Settings_ManagerCanHardDelete_Help"]</div>
+                </div>
+
+                <div class="settings-field settings-field-check">
+                    <div class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="_formModel.MechanicCanAddCatalogServices" id="mechanicCanAddCatalogServices" />
+                        <label class="form-check-label" for="mechanicCanAddCatalogServices">@L["Settings_MechanicCanAddCatalogServices"]</label>
+                    </div>
+                    <div class="form-text">@L["Settings_MechanicCanAddCatalogServices_Help"]</div>
+                </div>
+            </section>
         </div>
 
-        <div class="mb-3 settings-timezone-field">
-            <label class="form-label">@L["Settings_Theme"]</label>
-            <InputSelect class="form-select" @bind-Value="_formModel.Theme">
-                <option value="light">@L["Settings_Theme_Light"]</option>
-                <option value="dark">@L["Settings_Theme_Dark"]</option>
-            </InputSelect>
-            <div class="form-text">@L["Settings_Theme_Help"]</div>
+        <div class="settings-form-actions">
+            <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
+                @(IsSaving ? L["Saving"] : L["Save"])
+            </button>
+
+            <button type="button" class="btn btn-outline-secondary" @onclick="OpenOrganizationProfile">
+                @L["Settings_Organization_Open"]
+            </button>
         </div>
-
-        <button type="submit" class="btn btn-primary me-2" disabled="@IsSaving">
-            @(IsSaving ? L["Saving"] : L["Save"])
-        </button>
-
-        <button type="button" class="btn btn-outline-secondary" @onclick="OpenOrganizationProfile">
-            @L["Settings_Organization_Open"]
-        </button>
     </EditForm>
 }
 
@@ -63,6 +138,22 @@ else
         public string TimeZoneId { get; set; } = string.Empty;
 
         public string Theme { get; set; } = "light";
+
+        public string CurrencyCode { get; set; } = "RUB";
+
+        public string DefaultVisitStatus { get; set; } = "Created";
+
+        public int ReminderLookbackDays { get; set; } = 7;
+
+        public bool HideArchivedByDefault { get; set; } = true;
+
+        public bool ManagerCanHardDelete { get; set; }
+
+        public bool MechanicCanAddCatalogServices { get; set; }
+
+        public int AuditRetentionDays { get; set; } = 30;
+
+        public int ListPageSize { get; set; } = 30;
     }
 
     private static readonly IReadOnlyList<TimeZoneInfo> AvailableTimeZones =
@@ -97,8 +188,7 @@ else
                 return;
             }
 
-            _formModel.TimeZoneId = settings.TimeZoneId;
-            _formModel.Theme = settings.Theme;
+            ApplySettings(settings);
         }
         catch (Exception ex)
         {
@@ -108,6 +198,20 @@ else
         {
             IsLoading = false;
         }
+    }
+
+    private void ApplySettings(SettingsModel settings)
+    {
+        _formModel.TimeZoneId = settings.TimeZoneId;
+        _formModel.Theme = settings.Theme;
+        _formModel.CurrencyCode = settings.CurrencyCode;
+        _formModel.DefaultVisitStatus = settings.DefaultVisitStatus;
+        _formModel.ReminderLookbackDays = settings.ReminderLookbackDays;
+        _formModel.HideArchivedByDefault = settings.HideArchivedByDefault;
+        _formModel.ManagerCanHardDelete = settings.ManagerCanHardDelete;
+        _formModel.MechanicCanAddCatalogServices = settings.MechanicCanAddCatalogServices;
+        _formModel.AuditRetentionDays = settings.AuditRetentionDays;
+        _formModel.ListPageSize = settings.ListPageSize;
     }
 
     private void OpenOrganizationProfile()
@@ -123,9 +227,19 @@ else
             ErrorMessage = null;
             SuccessMessage = null;
 
-            var updated = await ApiClient.UpdateSettingsAsync(
-                _formModel.TimeZoneId,
-                _formModel.Theme);
+            var updated = await ApiClient.UpdateSettingsAsync(new SettingsModel
+            {
+                TimeZoneId = _formModel.TimeZoneId,
+                Theme = _formModel.Theme,
+                CurrencyCode = _formModel.CurrencyCode,
+                DefaultVisitStatus = _formModel.DefaultVisitStatus,
+                ReminderLookbackDays = _formModel.ReminderLookbackDays,
+                HideArchivedByDefault = _formModel.HideArchivedByDefault,
+                ManagerCanHardDelete = _formModel.ManagerCanHardDelete,
+                MechanicCanAddCatalogServices = _formModel.MechanicCanAddCatalogServices,
+                AuditRetentionDays = _formModel.AuditRetentionDays,
+                ListPageSize = _formModel.ListPageSize
+            });
 
             if (updated is null)
             {
@@ -135,8 +249,8 @@ else
 
             AppTimeZone.SetTimeZoneId(updated.TimeZoneId);
             await ThemeService.ApplyAsync(updated.Theme);
-            _formModel.TimeZoneId = updated.TimeZoneId;
-            _formModel.Theme = updated.Theme;
+            AppPreferences.Apply(updated);
+            ApplySettings(updated);
             SuccessMessage = L["Settings_Saved"];
         }
         catch (Exception ex)

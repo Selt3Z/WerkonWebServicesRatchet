@@ -8,6 +8,8 @@
 @inject AppTimeZone AppTimeZone
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MoneyFormatService MoneyFormat
+@inject AppPreferencesService AppPreferences
 
 <PageTitle>@L["VisitDetails_Title"]</PageTitle>
 
@@ -27,205 +29,279 @@ else if (Visit is null)
 }
 else
 {
-    <div class="mb-4">
-        <h3>@AppTimeZone.FromUtc(Visit.VisitedAtUtc).ToString("yyyy-MM-dd HH:mm")</h3>
-        <p><strong>@L["Status"]:</strong> @L.GetVisitStatus(Visit.Status)</p>
-        <p><strong>@L["Mileage"]:</strong> @Visit.MileageAtVisit</p>
-        <p><strong>@L["CustomerComplaint"]:</strong> @Visit.CustomerComplaint</p>
-        <p><strong>@L["MechanicComment"]:</strong> @Visit.MechanicComment</p>
-        <p><strong>@L["Visit_AssignedMechanic"]:</strong> @GetAssignedMechanicLabel()</p>
-
-        @if (CanAssignMechanic)
-        {
-            <div class="mb-3 d-flex flex-wrap gap-2 align-items-end">
-                <div>
-                    <label class="form-label">@L["Visit_AssignedMechanic"]</label>
-                    <select class="form-select"
-                            value="@FormatMechanicOptionValue(SelectedMechanicUserId)"
-                            @onchange="OnMechanicSelectionChanged">
-                        <option value="">@L["Visit_AssignedMechanic_None"]</option>
-                        @foreach (var mechanic in Mechanics)
-                        {
-                            <option value="@mechanic.Id">@mechanic.DisplayName</option>
-                        }
-                    </select>
-                </div>
-                <button class="btn btn-outline-secondary"
-                        disabled="@IsAssigningMechanic"
-                        @onclick="AssignMechanicAsync">
-                    @(IsAssigningMechanic ? L["Visit_AssigningMechanic"] : L["Visit_AssignMechanic"])
-                </button>
+    <div class="detail-page">
+        <div class="entity-panel">
+            <div class="entity-header">
+                <h2 class="entity-title">
+                    № @Visit.Number · @AppTimeZone.FromUtc(Visit.VisitedAtUtc).ToString("yyyy-MM-dd HH:mm")
+                    @if (Visit.IsArchived)
+                    {
+                        <span class="badge bg-secondary ms-1">@L["Archive_Badge"]</span>
+                    }
+                </h2>
             </div>
-        }
 
-        @if (!IsVisitClosed)
-        {
-            <button class="btn btn-primary me-2" @onclick="EditVisit">@L["EditVisit"]</button>
-        }
-
-        <button class="btn btn-outline-success me-2" @onclick="AddReminder">@L["Reminder_Add"]</button>
-
-        @if (CanCloseVisit)
-        {
-            <button class="btn btn-warning me-2"
-                    disabled="@IsClosingVisit"
-                    @onclick="ConfirmCloseVisitAsync">
-                @(IsClosingVisit ? L["Visit_Closing"] : L["Visit_Close"])
-            </button>
-        }
-
-        @if (CanGenerateWorkOrder)
-        {
-            <button class="btn btn-outline-primary"
-                    disabled="@IsGeneratingWorkOrder"
-                    @onclick="GenerateWorkOrderAsync">
-                @(IsGeneratingWorkOrder ? L["Visit_WorkOrder_Generating"] : L["Visit_WorkOrder_Generate"])
-            </button>
-        }
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(VisitActionErrorMessage))
-    {
-        <div class="alert alert-danger">@VisitActionErrorMessage</div>
-    }
-
-    <h4>@L["ServiceItems"]</h4>
-
-    @if (!string.IsNullOrWhiteSpace(ServiceItemErrorMessage))
-    {
-        <div class="alert alert-danger">@ServiceItemErrorMessage</div>
-    }
-
-    @if (Visit.ServiceItems.Count == 0)
-    {
-        <p>@L["ServiceItems_None"]</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>@L["Name"]</th>
-                    <th>@L["Quantity"]</th>
-                    <th>@L["UnitPrice"]</th>
-                    <th>@L["Total"]</th>
-                    <th>@L["Comment"]</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in Visit.ServiceItems)
-                {
-                    <tr>
-                        <td>@item.Name</td>
-                        <td>@item.Quantity</td>
-                        <td>@item.UnitPrice</td>
-                        <td>@item.TotalPrice</td>
-                        <td>@item.Comment</td>
-                        <td>
-                            @if (!IsVisitClosed)
-                            {
-                                <button class="btn btn-sm btn-outline-danger"
-                                        disabled="@IsDeletingItem"
-                                        @onclick="() => DeleteServiceItemAsync(item.Id)">
-                                    @L["Delete"]
-                                </button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
-    <div class="mt-4">
-        <h4>@L["TotalAmount"]: @Visit.TotalAmount</h4>
-    </div>
-
-    @if (!IsVisitClosed)
-    {
-    <div class="card mt-4 mb-4">
-        <div class="card-body">
-            <h5 class="card-title">@L["AddServiceItem"]</h5>
-
-            <EditForm Model="NewServiceItem" FormName="service-item-form" OnValidSubmit="AddServiceItemAsync">
-                <DataAnnotationsValidator />
-                <ValidationSummary />
-
-                <div class="mb-3">
-                    <label class="form-label">@L["ServiceItem_Source"]</label>
-                    <InputSelect class="form-select" @bind-Value="EntryMode" @bind-Value:after="OnEntryModeChanged">
-                        <option value="catalog">@L["ServiceItem_FromCatalog"]</option>
-                        <option value="manual">@L["ServiceItem_Manual"]</option>
-                    </InputSelect>
+            <dl class="entity-meta">
+                <div class="entity-meta-item">
+                    <dt>@L["Visit_Number"]</dt>
+                    <dd>@Visit.Number</dd>
                 </div>
-
-                @if (IsCatalogEntry)
+                <div class="entity-meta-item">
+                    <dt>@L["Status"]</dt>
+                    <dd>@L.GetVisitStatus(Visit.Status)</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Mileage"]</dt>
+                    <dd>@Visit.MileageAtVisit</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Visit_AssignedMechanic"]</dt>
+                    <dd>@GetAssignedMechanicLabel()</dd>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Visit.CustomerComplaint))
                 {
-                    <div class="mb-3">
-                        <label class="form-label">@L["ServiceCatalog_Title"]</label>
-                        <InputSelect class="form-select"
-                                     TValue="Guid?"
-                                     Value="SelectedCatalogServiceId"
-                                     ValueChanged="OnCatalogServiceSelectedAsync"
-                                     ValueExpression="() => SelectedCatalogServiceId">
-                            <option value="">@L["ServiceItem_SelectService"]</option>
-                            @foreach (var service in CatalogServices)
-                            {
-                                <option value="@service.Id">
-                                    @service.Name (@service.DefaultUnitPrice.ToString("0.##") / @service.DefaultUnit)
-                                </option>
-                            }
-                        </InputSelect>
+                    <div class="entity-meta-item entity-meta-wide">
+                        <dt>@L["CustomerComplaint"]</dt>
+                        <dd>@Visit.CustomerComplaint</dd>
                     </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Visit.MechanicComment))
+                {
+                    <div class="entity-meta-item entity-meta-wide">
+                        <dt>@L["MechanicComment"]</dt>
+                        <dd>@Visit.MechanicComment</dd>
+                    </div>
+                }
+            </dl>
+
+            @if (CanAssignMechanic && !Visit.IsArchived)
+            {
+                <div class="inline-form-bar">
+                    <div>
+                        <label class="form-label">@L["Visit_AssignedMechanic"]</label>
+                        <select class="form-select"
+                                value="@FormatMechanicOptionValue(SelectedMechanicUserId)"
+                                @onchange="OnMechanicSelectionChanged">
+                            <option value="">@L["Visit_AssignedMechanic_None"]</option>
+                            @foreach (var mechanic in Mechanics)
+                            {
+                                <option value="@mechanic.Id">@mechanic.DisplayName</option>
+                            }
+                        </select>
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm"
+                            disabled="@IsAssigningMechanic"
+                            @onclick="AssignMechanicAsync">
+                        @(IsAssigningMechanic ? L["Visit_AssigningMechanic"] : L["Visit_AssignMechanic"])
+                    </button>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(VisitActionErrorMessage))
+            {
+                <div class="alert alert-danger mt-2 mb-0">@VisitActionErrorMessage</div>
+            }
+
+            <div class="action-bar mt-2">
+                @if (!IsVisitClosed && !Visit.IsArchived)
+                {
+                    <button class="btn btn-primary" @onclick="EditVisit">@L["EditVisit"]</button>
+                }
+
+                @if (CanCloseVisit)
+                {
+                    <button class="btn btn-warning"
+                            disabled="@IsClosingVisit"
+                            @onclick="ConfirmCloseVisitAsync">
+                        @(IsClosingVisit ? L["Visit_Closing"] : L["Visit_Close"])
+                    </button>
+                }
+
+                @if (CanGenerateWorkOrder)
+                {
+                    <button class="btn btn-outline-primary"
+                            disabled="@IsGeneratingWorkOrder"
+                            @onclick="GenerateWorkOrderAsync">
+                        @(IsGeneratingWorkOrder ? L["Visit_WorkOrder_Generating"] : L["Visit_WorkOrder_Generate"])
+                    </button>
+                }
+            </div>
+
+            <div class="action-bar action-bar-muted">
+                @if (Visit.IsArchived)
+                {
+                    <button class="btn btn-outline-success btn-sm"
+                            disabled="@IsArchiving"
+                            @onclick="RestoreVisitAsync">
+                        @L["Archive_Restore"]
+                    </button>
                 }
                 else
                 {
-                    <div class="mb-3">
-                        <label class="form-label">@L["Name"]</label>
-                        <InputText class="form-control" @bind-Value="NewServiceItem.Name" />
-                        <ValidationMessage For="() => NewServiceItem.Name" />
-                    </div>
+                    <button class="btn btn-outline-secondary btn-sm"
+                            disabled="@IsArchiving"
+                            @onclick="ArchiveVisitAsync">
+                        @L["Archive_Archive"]
+                    </button>
                 }
 
-                @if (IsCatalogEntry)
+                @if (CanHardDelete && Visit is not null && !Visit.HasDependentRecords)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">@L["Name"]</label>
-                        <input class="form-control" value="@NewServiceItem.Name" readonly />
-                    </div>
+                    <button class="btn btn-outline-danger btn-sm"
+                            disabled="@IsArchiving"
+                            @onclick="HardDeleteAsync">
+                        @L["Archive_HardDelete"]
+                    </button>
                 }
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">@L["Quantity"]</label>
-                        <InputNumber class="form-control" @bind-Value="NewServiceItem.Quantity" />
-                        <ValidationMessage For="() => NewServiceItem.Quantity" />
-                    </div>
-
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">@L["UnitPrice"]</label>
-                        <InputNumber class="form-control" @bind-Value="NewServiceItem.UnitPrice" />
-                        <ValidationMessage For="() => NewServiceItem.UnitPrice" />
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">@L["Comment"]</label>
-                    <InputTextArea class="form-control" @bind-Value="NewServiceItem.Comment" />
-                </div>
-
-                <button type="submit" class="btn btn-success" disabled="@IsAddingItem">
-                    @(IsAddingItem ? L["Adding"] : L["AddServiceItem_Button"])
-                </button>
-            </EditForm>
+            </div>
         </div>
-    </div>
-    }
 
-    <button class="btn btn-secondary" @onclick="BackToVehicle">
-        @L["BackToVehicle"]
-    </button>
+        <section class="page-section">
+            <h3 class="section-title">@L["ServiceItems"]</h3>
+
+            @if (!string.IsNullOrWhiteSpace(ServiceItemErrorMessage))
+            {
+                <div class="alert alert-danger">@ServiceItemErrorMessage</div>
+            }
+
+            @if (Visit.ServiceItems.Count == 0)
+            {
+                <p>@L["ServiceItems_None"]</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@L["Name"]</th>
+                            <th>@L["Quantity"]</th>
+                            <th>@L["UnitPrice"]</th>
+                            <th>@L["Total"]</th>
+                            <th>@L["Comment"]</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Visit.ServiceItems)
+                        {
+                            <tr>
+                                <td>@item.Name</td>
+                                <td>@item.Quantity</td>
+                                <td>@MoneyFormat.Format(item.UnitPrice)</td>
+                                <td>@MoneyFormat.Format(item.TotalPrice)</td>
+                                <td>@item.Comment</td>
+                                <td class="table-row-actions">
+                                    @if (!IsVisitClosed)
+                                    {
+                                        <button type="button"
+                                                class="btn-icon-delete"
+                                                disabled="@IsDeletingItem"
+                                                title="@L["Delete"]"
+                                                aria-label="@L["Delete"]"
+                                                @onclick="() => DeleteServiceItemAsync(item.Id)">
+                                            <svg class="btn-icon-delete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+                                            </svg>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="summary-bar">
+                    <span class="summary-bar-label">@L["TotalAmount"]</span>
+                    <span>@MoneyFormat.Format(Visit.TotalAmount)</span>
+                </div>
+            }
+        </section>
+
+        @if (!IsVisitClosed)
+        {
+            <section class="page-section">
+                <h3 class="section-title">@L["AddServiceItem"]</h3>
+
+                <EditForm class="form-panel" Model="NewServiceItem" FormName="service-item-form" OnValidSubmit="AddServiceItemAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label class="form-label">@L["ServiceItem_Source"]</label>
+                        <InputSelect class="form-select" @bind-Value="EntryMode" @bind-Value:after="OnEntryModeChanged">
+                            <option value="catalog">@L["ServiceItem_FromCatalog"]</option>
+                            <option value="manual">@L["ServiceItem_Manual"]</option>
+                        </InputSelect>
+                    </div>
+
+                    @if (IsCatalogEntry)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">@L["ServiceCatalog_Title"]</label>
+                            <InputSelect class="form-select"
+                                         TValue="Guid?"
+                                         Value="SelectedCatalogServiceId"
+                                         ValueChanged="OnCatalogServiceSelectedAsync"
+                                         ValueExpression="() => SelectedCatalogServiceId">
+                                <option value="">@L["ServiceItem_SelectService"]</option>
+                                @foreach (var service in CatalogServices)
+                                {
+                                    <option value="@service.Id">
+                                        @service.Name (@MoneyFormat.Format(service.DefaultUnitPrice) / @service.DefaultUnit)
+                                    </option>
+                                }
+                            </InputSelect>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">@L["Name"]</label>
+                            <InputText class="form-control" @bind-Value="NewServiceItem.Name" />
+                            <ValidationMessage For="() => NewServiceItem.Name" />
+                        </div>
+                    }
+
+                    @if (IsCatalogEntry)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">@L["Name"]</label>
+                            <input class="form-control" value="@NewServiceItem.Name" readonly />
+                        </div>
+                    }
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">@L["Quantity"]</label>
+                            <InputNumber class="form-control" @bind-Value="NewServiceItem.Quantity" />
+                            <ValidationMessage For="() => NewServiceItem.Quantity" />
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">@L["UnitPrice"]</label>
+                            <InputNumber class="form-control" @bind-Value="NewServiceItem.UnitPrice" />
+                            <ValidationMessage For="() => NewServiceItem.UnitPrice" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">@L["Comment"]</label>
+                        <InputTextArea class="form-control" @bind-Value="NewServiceItem.Comment" />
+                    </div>
+
+                    <button type="submit" class="btn btn-success" disabled="@IsAddingItem">
+                        @(IsAddingItem ? L["Adding"] : L["AddServiceItem_Button"])
+                    </button>
+                </EditForm>
+            </section>
+        }
+
+        <footer class="page-footer-nav">
+            <button class="btn btn-secondary btn-sm" @onclick="BackToVehicle">
+                @L["BackToVehicle"]
+            </button>
+        </footer>
+    </div>
 }
 
 @code {
@@ -238,27 +314,34 @@ else
     private List<MechanicListItem> Mechanics { get; set; } = [];
     private Guid? SelectedMechanicUserId { get; set; }
     private bool CanAssignMechanic { get; set; }
+    private bool CanHardDelete { get; set; }
     private string EntryMode { get; set; } = "catalog";
     private Guid? SelectedCatalogServiceId { get; set; }
     private bool IsCatalogEntry => EntryMode == "catalog";
     private bool IsVisitCompleted => Visit?.Status == VisitStatuses.Completed;
     private bool CanGenerateWorkOrder => IsVisitCompleted && Visit!.ServiceItems.Count > 0;
     private bool IsVisitClosed => Visit?.Status is VisitStatuses.Completed or VisitStatuses.Canceled;
-    private bool CanCloseVisit => Visit?.Status is VisitStatuses.Created or VisitStatuses.InProgress;
+    private bool CanCloseVisit => (Visit?.Status is VisitStatuses.Created or VisitStatuses.InProgress)
+        && Visit?.IsArchived == false;
     private bool IsLoading { get; set; }
     private bool IsAddingItem { get; set; }
     private bool IsDeletingItem { get; set; }
     private bool IsClosingVisit { get; set; }
     private bool IsGeneratingWorkOrder { get; set; }
     private bool IsAssigningMechanic { get; set; }
+    private bool IsArchiving { get; set; }
     private string? ErrorMessage { get; set; }
     private string? ServiceItemErrorMessage { get; set; }
     private string? VisitActionErrorMessage { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         CanAssignMechanic = authState.User.IsInRole("Administrator") || authState.User.IsInRole("Manager");
+        CanHardDelete = authState.User.IsInRole("Administrator")
+            || (authState.User.IsInRole("Manager") && AppPreferences.ManagerCanHardDelete);
 
         await LoadCatalogServicesAsync();
 
@@ -331,7 +414,8 @@ else
     {
         try
         {
-            CatalogServices = await ApiClient.GetCatalogServicesAsync(activeOnly: true);
+            var page = await ApiClient.GetCatalogServicesAsync(activeOnly: true, take: 500);
+            CatalogServices = page.Items;
         }
         catch
         {
@@ -487,9 +571,83 @@ else
         NavigationManager.NavigateTo($"/visits/{Id}/edit");
     }
 
-    private void AddReminder()
+    private async Task ArchiveVisitAsync()
     {
-        NavigationManager.NavigateTo($"/visits/{Id}/reminders/new");
+        await SetVisitArchivedAsync(archived: true);
+    }
+
+    private async Task RestoreVisitAsync()
+    {
+        await SetVisitArchivedAsync(archived: false);
+    }
+
+    private async Task HardDeleteAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", L["Archive_HardDeleteConfirm"]);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            IsArchiving = true;
+            VisitActionErrorMessage = null;
+
+            var (success, error) = await ApiClient.DeleteVisitAsync(Id);
+
+            if (!success)
+            {
+                VisitActionErrorMessage = error;
+                return;
+            }
+
+            if (Visit is not null)
+            {
+                NavigationManager.NavigateTo($"/vehicles/{Visit.VehicleId}");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/clients");
+            }
+        }
+        catch (Exception ex)
+        {
+            VisitActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsArchiving = false;
+        }
+    }
+
+    private async Task SetVisitArchivedAsync(bool archived)
+    {
+        try
+        {
+            IsArchiving = true;
+            VisitActionErrorMessage = null;
+
+            var (success, error) = archived
+                ? await ApiClient.ArchiveVisitAsync(Id)
+                : await ApiClient.RestoreVisitAsync(Id);
+
+            if (!success)
+            {
+                VisitActionErrorMessage = error;
+                return;
+            }
+
+            await LoadVisitAsync(showFullPageLoading: false);
+        }
+        catch (Exception ex)
+        {
+            VisitActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsArchiving = false;
+        }
     }
 
     private async Task ConfirmCloseVisitAsync()

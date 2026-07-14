@@ -38,6 +38,12 @@ public static class AppRoles
         Manager
     ];
 
+    public static readonly string[] CanViewAuditLog =
+    [
+        Administrator,
+        Manager
+    ];
+
     public static readonly string[] CanAssignVisitMechanic =
     [
         Administrator,

@@ -5,7 +5,6 @@ public sealed class ReminderDetailsResponse
     public Guid Id { get; set; }
     public Guid VehicleId { get; set; }
     public Guid ClientId { get; set; }
-    public Guid? VisitId { get; set; }
 
     public DateTime ReminderAtUtc { get; set; }
     public string Note { get; set; } = string.Empty;

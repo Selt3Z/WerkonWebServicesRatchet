@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WerkonWebServicesRatchet.Contracts.Settings;
+using WerkonWebServicesRatchet.Infrastructure.Backups;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using WerkonWebServicesRatchet.Infrastructure.Settings;
 
@@ -12,10 +13,12 @@ namespace WerkonWebServicesRatchet.Features.Settings;
 public sealed class SettingsController : ControllerBase
 {
     private readonly AppSettingsService _appSettingsService;
+    private readonly BackupStatusReader _backupStatusReader;
 
-    public SettingsController(AppSettingsService appSettingsService)
+    public SettingsController(AppSettingsService appSettingsService, BackupStatusReader backupStatusReader)
     {
         _appSettingsService = appSettingsService;
+        _backupStatusReader = backupStatusReader;
     }
 
     [HttpGet]
@@ -96,6 +99,13 @@ public sealed class SettingsController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
+    }
+
+    [HttpGet("backup-status")]
+    [Authorize(Policy = AuthorizationPolicies.ManageUsers)]
+    public async Task<ActionResult<BackupStatusResponse>> GetBackupStatus(CancellationToken cancellationToken)
+    {
+        return await _backupStatusReader.ReadAsync(cancellationToken);
     }
 
     [HttpDelete("organization/logo")]

@@ -1,10 +1,14 @@
 @page "/vehicles/{Id:guid}"
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using WerkonWebServicesRatchet.Web.Models
 @using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 @inject AppTimeZone AppTimeZone
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AppPreferencesService AppPreferences
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@L["VehicleDetails_Title"]</PageTitle>
 
@@ -24,68 +28,154 @@ else if (Vehicle is null)
 }
 else
 {
-    <div class="mb-4">
-        <h3>@Vehicle.Brand @Vehicle.Model</h3>
-        <p><strong>@L["Year"]:</strong> @Vehicle.Year</p>
-        <p><strong>@L["LicensePlate"]:</strong> @Vehicle.LicensePlate</p>
-        <p><strong>@L["Vin"]:</strong> @Vehicle.Vin</p>
+    <div class="detail-page">
+        <div class="entity-panel">
+            <div class="entity-header">
+                <h2 class="entity-title">
+                    @Vehicle.Brand @Vehicle.Model
+                    @if (Vehicle.IsArchived)
+                    {
+                        <span class="badge bg-secondary ms-1">@L["Archive_Badge"]</span>
+                    }
+                </h2>
+            </div>
 
-        <button class="btn btn-primary me-2" @onclick="EditVehicle">@L["Vehicle_Edit"]</button>
-        <button class="btn btn-success me-2" @onclick="AddVisit">@L["Vehicle_AddVisit"]</button>
-        <button class="btn btn-outline-success" @onclick="AddReminder">@L["Reminder_Add"]</button>
+            <dl class="entity-meta">
+                <div class="entity-meta-item">
+                    <dt>@L["Year"]</dt>
+                    <dd>@Vehicle.Year</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["LicensePlate"]</dt>
+                    <dd>@Vehicle.LicensePlate</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Vin"]</dt>
+                    <dd>@Vehicle.Vin</dd>
+                </div>
+            </dl>
+
+            @if (!string.IsNullOrWhiteSpace(ActionErrorMessage))
+            {
+                <div class="alert alert-danger mt-2 mb-0">@ActionErrorMessage</div>
+            }
+
+            @if (Vehicle.IsArchived)
+            {
+                <div class="action-bar mt-2">
+                    <button class="btn btn-outline-success" disabled="@IsBusy" @onclick="RestoreAsync">@L["Archive_Restore"]</button>
+                </div>
+            }
+            else
+            {
+                <div class="action-bar mt-2">
+                    <button class="btn btn-primary" @onclick="EditVehicle">@L["Vehicle_Edit"]</button>
+                    <button class="btn btn-success" @onclick="AddVisit">@L["Vehicle_AddVisit"]</button>
+                    <button class="btn btn-outline-success" @onclick="AddReminder">@L["Reminder_Add"]</button>
+                </div>
+                <div class="action-bar action-bar-muted">
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@IsBusy" @onclick="ArchiveAsync">@L["Archive_Archive"]</button>
+                </div>
+            }
+
+            @if (CanHardDelete && Vehicle is not null && !Vehicle.HasDependentRecords)
+            {
+                <div class="action-bar action-bar-muted">
+                    <button class="btn btn-outline-danger btn-sm" disabled="@IsBusy" @onclick="HardDeleteAsync">@L["Archive_HardDelete"]</button>
+                </div>
+            }
+        </div>
+
+        <section class="page-section">
+            <h3 class="section-title">@L["Client"]</h3>
+            <div class="related-entity">
+                <div class="related-entity-body">
+                    <span class="related-entity-name">@Vehicle.ClientFullName</span>
+                    <span class="related-entity-meta">@Vehicle.ClientPhoneNumber</span>
+                    <button class="btn btn-sm btn-outline-secondary"
+                            @onclick="() => OpenClient(Vehicle.ClientId)">
+                        @L["OpenClient"]
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="page-section">
+            <h3 class="section-title">@L["Visits"]</h3>
+
+            @if (Vehicle.Visits.Count == 0)
+            {
+                <p>@L["Visits_None"]</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@L["Visit_Number"]</th>
+                            <th>@L["Date"]</th>
+                            <th>@L["Mileage"]</th>
+                            <th>@L["Complaint"]</th>
+                            <th>@L["Status"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var visit in Vehicle.Visits)
+                        {
+                            <tr class="table-row-action" @onclick="() => OpenVisit(visit.Id)">
+                                <td>@visit.Number</td>
+                                <td>@AppTimeZone.FromUtc(visit.VisitedAtUtc).ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@visit.MileageAtVisit</td>
+                                <td>@visit.CustomerComplaint</td>
+                                <td>@L.GetVisitStatus(visit.Status)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        @if (Vehicle.Reminders.Count > 0)
+        {
+            <section class="page-section">
+                <details class="vehicle-reminders-spoiler">
+                    <summary class="vehicle-reminders-spoiler-summary">
+                        @L["Reminders"] (@Vehicle.Reminders.Count)
+                    </summary>
+                    <table class="table mt-2">
+                        <thead>
+                            <tr>
+                                <th>@L["Date"]</th>
+                                <th>@L["Reminder_Note"]</th>
+                                <th>@L["Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reminder in Vehicle.Reminders)
+                            {
+                                <tr class="table-row-action" @onclick="() => OpenReminder(reminder.Id)">
+                                    <td>@AppTimeZone.FromUtc(reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</td>
+                                    <td>@reminder.Note</td>
+                                    <td>
+                                        @if (reminder.IsClosed)
+                                        {
+                                            <span class="reminder-check" title="@L["Reminder_Closed"]">✔</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </details>
+            </section>
+        }
+
+        <footer class="page-footer-nav">
+            <button class="btn btn-secondary btn-sm" @onclick="BackToClient">
+                @L["BackToClient"]
+            </button>
+        </footer>
     </div>
-
-    <div class="mb-4">
-        <h4>@L["Client"]</h4>
-        <p><strong>@L["Name"]:</strong> @Vehicle.ClientFullName</p>
-        <p><strong>@L["Phone"]:</strong> @Vehicle.ClientPhoneNumber</p>
-        <button class="btn btn-sm btn-outline-secondary"
-                @onclick="() => OpenClient(Vehicle.ClientId)">
-            @L["OpenClient"]
-        </button>
-    </div>
-
-    <h4>@L["Visits"]</h4>
-
-    @if (Vehicle.Visits.Count == 0)
-    {
-        <p>@L["Visits_None"]</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>@L["Date"]</th>
-                    <th>@L["Mileage"]</th>
-                    <th>@L["Complaint"]</th>
-                    <th>@L["Status"]</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var visit in Vehicle.Visits)
-                {
-                    <tr>
-                        <td>@AppTimeZone.FromUtc(visit.VisitedAtUtc).ToString("yyyy-MM-dd HH:mm")</td>
-                        <td>@visit.MileageAtVisit</td>
-                        <td>@visit.CustomerComplaint</td>
-                        <td>@L.GetVisitStatus(visit.Status)</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary"
-                                    @onclick="() => OpenVisit(visit.Id)">
-                                @L["Open"]
-                            </button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
-    <button class="btn btn-secondary" @onclick="BackToClient">
-        @L["BackToClient"]
-    </button>
 }
 
 @code {
@@ -94,11 +184,24 @@ else
 
     private VehicleDetailsModel? Vehicle { get; set; }
     private bool IsLoading { get; set; }
+    private bool IsBusy { get; set; }
+    private bool CanHardDelete { get; set; }
     private string? ErrorMessage { get; set; }
+    private string? ActionErrorMessage { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
+        await ResolveHardDeleteAccessAsync();
         await LoadVehicleAsync();
+    }
+
+    private async Task ResolveHardDeleteAccessAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+
+        CanHardDelete = authState.User.IsInRole("Administrator")
+            || (authState.User.IsInRole("Manager") && AppPreferences.ManagerCanHardDelete);
     }
 
     private async Task LoadVehicleAsync()
@@ -130,6 +233,11 @@ else
         NavigationManager.NavigateTo($"/visits/{visitId}");
     }
 
+    private void OpenReminder(Guid reminderId)
+    {
+        NavigationManager.NavigateTo($"/reminders/{reminderId}");
+    }
+
     private void BackToClient()
     {
         if (Vehicle is not null)
@@ -155,5 +263,84 @@ else
     private void AddReminder()
     {
         NavigationManager.NavigateTo($"/vehicles/{Id}/reminders/new");
+    }
+
+    private async Task ArchiveAsync()
+    {
+        await SetArchivedAsync(archived: true);
+    }
+
+    private async Task RestoreAsync()
+    {
+        await SetArchivedAsync(archived: false);
+    }
+
+    private async Task SetArchivedAsync(bool archived)
+    {
+        try
+        {
+            IsBusy = true;
+            ActionErrorMessage = null;
+
+            var (success, error) = archived
+                ? await ApiClient.ArchiveVehicleAsync(Id)
+                : await ApiClient.RestoreVehicleAsync(Id);
+
+            if (!success)
+            {
+                ActionErrorMessage = error;
+                return;
+            }
+
+            await LoadVehicleAsync();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task HardDeleteAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", L["Archive_HardDeleteConfirm"]);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            ActionErrorMessage = null;
+
+            var (success, error) = await ApiClient.DeleteVehicleAsync(Id);
+
+            if (!success)
+            {
+                ActionErrorMessage = error;
+                return;
+            }
+
+            if (Vehicle is not null)
+            {
+                NavigationManager.NavigateTo($"/clients/{Vehicle.ClientId}");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/clients");
+            }
+        }
+        catch (Exception ex)
+        {
+            ActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 }

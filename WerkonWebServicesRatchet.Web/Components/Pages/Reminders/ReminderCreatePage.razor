@@ -1,5 +1,4 @@
 @page "/reminders/new"
-@page "/visits/{VisitId:guid}/reminders/new"
 @page "/vehicles/{VehicleId:guid}/reminders/new"
 @using Microsoft.AspNetCore.Components
 @using WerkonWebServicesRatchet.Web.Models
@@ -30,10 +29,6 @@ else
                 <p><strong>@L["Phone"]:</strong> @ClientPhoneNumber</p>
                 <p><strong>@L["Vehicle"]:</strong> @VehicleBrand @VehicleModel</p>
                 <p><strong>@L["LicensePlate"]:</strong> @LicensePlate</p>
-                @if (VisitId.HasValue && VisitDateLocal.HasValue)
-                {
-                    <p><strong>@L["Visit"]:</strong> @VisitDateLocal.Value.ToString("yyyy-MM-dd HH:mm")</p>
-                }
             </div>
         </div>
     }
@@ -68,9 +63,6 @@ else
 
 @code {
     [Parameter]
-    public Guid? VisitId { get; set; }
-
-    [Parameter]
     public Guid? VehicleId { get; set; }
 
     private ReminderCreateModel Model { get; set; } = new();
@@ -84,7 +76,6 @@ else
     private string VehicleBrand { get; set; } = string.Empty;
     private string VehicleModel { get; set; } = string.Empty;
     private string LicensePlate { get; set; } = string.Empty;
-    private DateTime? VisitDateLocal { get; set; }
 
     private string ReminderDateString =>
         Model.ReminderDateLocal?.ToString("yyyy-MM-dd") ?? string.Empty;
@@ -95,7 +86,7 @@ else
         ContextLoaded = false;
         Model = new ReminderCreateModel();
 
-        if (!VisitId.HasValue && !VehicleId.HasValue)
+        if (!VehicleId.HasValue)
         {
             ErrorMessage = L["Reminder_ContextRequired"];
             return;
@@ -104,46 +95,21 @@ else
         try
         {
             IsLoading = true;
+            Model.VehicleId = VehicleId.Value;
 
-            if (VisitId.HasValue)
+            var vehicle = await ApiClient.GetVehicleDetailsAsync(VehicleId.Value);
+
+            if (vehicle is null)
             {
-                var visit = await ApiClient.GetVisitAsync(VisitId.Value);
-
-                if (visit is null)
-                {
-                    ErrorMessage = L["Visit_NotFound"];
-                    return;
-                }
-
-                Model.VehicleId = visit.VehicleId;
-                Model.VisitId = visit.Id;
-                VisitDateLocal = AppTimeZone.FromUtc(visit.VisitedAtUtc);
-
-                var vehicle = await ApiClient.GetVehicleDetailsAsync(visit.VehicleId);
-
-                if (vehicle is null)
-                {
-                    ErrorMessage = L["Vehicle_NotFound"];
-                    return;
-                }
-
-                FillVehicleContext(vehicle);
-            }
-            else if (VehicleId.HasValue)
-            {
-                Model.VehicleId = VehicleId.Value;
-
-                var vehicle = await ApiClient.GetVehicleDetailsAsync(VehicleId.Value);
-
-                if (vehicle is null)
-                {
-                    ErrorMessage = L["Vehicle_NotFound"];
-                    return;
-                }
-
-                FillVehicleContext(vehicle);
+                ErrorMessage = L["Vehicle_NotFound"];
+                return;
             }
 
+            ClientFullName = vehicle.ClientFullName;
+            ClientPhoneNumber = vehicle.ClientPhoneNumber;
+            VehicleBrand = vehicle.Brand;
+            VehicleModel = vehicle.Model;
+            LicensePlate = vehicle.LicensePlate;
             ContextLoaded = true;
         }
         catch (Exception ex)
@@ -154,15 +120,6 @@ else
         {
             IsLoading = false;
         }
-    }
-
-    private void FillVehicleContext(VehicleDetailsModel vehicle)
-    {
-        ClientFullName = vehicle.ClientFullName;
-        ClientPhoneNumber = vehicle.ClientPhoneNumber;
-        VehicleBrand = vehicle.Brand;
-        VehicleModel = vehicle.Model;
-        LicensePlate = vehicle.LicensePlate;
     }
 
     private void OnDateChanged(ChangeEventArgs e)
@@ -214,12 +171,6 @@ else
 
     private void Cancel()
     {
-        if (VisitId.HasValue)
-        {
-            NavigationManager.NavigateTo($"/visits/{VisitId.Value}");
-            return;
-        }
-
         if (VehicleId.HasValue)
         {
             NavigationManager.NavigateTo($"/vehicles/{VehicleId.Value}");

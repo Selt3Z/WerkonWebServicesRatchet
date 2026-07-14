@@ -7,9 +7,6 @@ public sealed class Reminder
     public Guid VehicleId { get; set; }
     public Vehicle Vehicle { get; set; } = null!;
 
-    public Guid? VisitId { get; set; }
-    public Visit? Visit { get; set; }
-
     public DateTime ReminderAtUtc { get; set; }
     public string Note { get; set; } = string.Empty;
 

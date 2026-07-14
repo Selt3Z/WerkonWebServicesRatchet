@@ -1,34 +1,47 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@using WerkonWebServicesRatchet.Web.Localization
+@inject IJSRuntime JS
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<input type="checkbox" id="nav-menu-toggle" title="Navigation menu" class="navbar-toggler" />
+<label for="nav-menu-toggle" class="nav-backdrop" aria-hidden="true"></label>
 
-<div class="nav-sidebar">
-    <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-        <nav class="flex-column">
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+<aside class="app-sidebar nav-sidebar">
+    <div class="nav-brand">
+        <NavLink class="nav-brand-link" href="/" Match="NavLinkMatch.All">
+            <img class="nav-brand-icon" src="images/icon.png" alt="" />
+            <div class="nav-brand-copy">
+                <span class="nav-brand-title">Ratchet</span>
+                <span class="nav-brand-vendor">Werkon Web Services</span>
+            </div>
+        </NavLink>
+    </div>
+
+    <div class="nav-scrollable">
+        <nav class="nav-section">
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All" @onclick="CloseMobileNavAsync">
                     <span class="bi bi-house-door-fill-nav-menu nav-menu-icon" aria-hidden="true"></span>
                     <span class="nav-menu-text">@L["Nav_Today"]</span>
                 </NavLink>
             </div>
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/clients">
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/clients" @onclick="CloseMobileNavAsync">
                     <span class="bi bi-person-bust-nav-menu nav-menu-icon" aria-hidden="true"></span>
                     <span class="nav-menu-text">@L["Nav_Clients"]</span>
                 </NavLink>
             </div>
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/schedule">
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/schedule" @onclick="CloseMobileNavAsync">
                     <span class="bi bi-calendar3-nav-menu nav-menu-icon" aria-hidden="true"></span>
                     <span class="nav-menu-text">@L["Nav_Schedule"]</span>
                 </NavLink>
             </div>
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/catalog-services">
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/catalog-services" @onclick="CloseMobileNavAsync">
                     <span class="bi bi-wrench-nav-menu nav-menu-icon" aria-hidden="true"></span>
                     <span class="nav-menu-text">@L["Nav_ServiceCatalog"]</span>
                 </NavLink>
@@ -36,84 +49,103 @@
         </nav>
     </div>
 
-    <div class="nav-bottom px-3" @onclick:stopPropagation="true">
-        <AuthorizeView Roles="Administrator">
-            <div class="nav-item">
-                <NavLink class="nav-link" href="/users">
-                    <span class="bi bi-users-nav-menu nav-menu-icon" aria-hidden="true"></span>
-                    <span class="nav-menu-text">@L["Nav_Users"]</span>
-                </NavLink>
-            </div>
-            <div class="nav-item">
-                <NavLink class="nav-link" href="/history">
-                    <span class="bi bi-book-nav-menu nav-menu-icon" aria-hidden="true"></span>
-                    <span class="nav-menu-text">@L["Nav_History"]</span>
-                </NavLink>
-            </div>
-            <div class="nav-item">
-                <NavLink class="nav-link" href="/settings">
-                    <span class="bi bi-gear-nav-menu nav-menu-icon" aria-hidden="true"></span>
-                    <span class="nav-menu-text">@L["Nav_Settings"]</span>
-                </NavLink>
-            </div>
+    <div class="nav-bottom" @onclick:stopPropagation="true">
+        <div class="nav-section-divider" aria-hidden="true"></div>
+
+        <AuthorizeView Roles="Administrator,Manager">
+            <nav class="nav-section nav-section-admin">
+                <AuthorizeView Roles="Administrator" Context="adminNav">
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="/users" @onclick="CloseMobileNavAsync">
+                            <span class="bi bi-users-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                            <span class="nav-menu-text">@L["Nav_Users"]</span>
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/history" @onclick="CloseMobileNavAsync">
+                        <span class="bi bi-book-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                        <span class="nav-menu-text">@L["Nav_History"]</span>
+                    </NavLink>
+                </div>
+                <AuthorizeView Roles="Administrator" Context="adminNavStatus">
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="/system-status" @onclick="CloseMobileNavAsync">
+                            <span class="bi bi-heart-pulse-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                            <span class="nav-menu-text">@L["Nav_SystemStatus"]</span>
+                        </NavLink>
+                    </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="/settings" @onclick="CloseMobileNavAsync">
+                            <span class="bi bi-gear-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                            <span class="nav-menu-text">@L["Nav_Settings"]</span>
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+            </nav>
         </AuthorizeView>
     </div>
 
-    <div class="nav-language px-3" @onclick:stopPropagation="true">
-        <label class="nav-language-label">@L["Lang_Label"]</label>
-        <div class="nav-language-picker">
-            <button type="button"
-                    class="btn btn-sm btn-outline-light nav-language-toggle w-100"
-                    aria-haspopup="listbox"
-                    aria-expanded="@IsLanguageMenuOpen"
-                    @onclick="ToggleLanguageMenu">
-                <span>@L.CurrentLanguage.NativeName</span>
-                <span class="nav-language-caret" aria-hidden="true">▾</span>
-            </button>
-
-            @if (IsLanguageMenuOpen)
-            {
-                <ul class="nav-language-menu" role="listbox" aria-label="@L["Lang_Label"]">
-                    @foreach (var language in L.AvailableLanguages)
-                    {
-                        <li role="option" aria-selected="@(language.Code == L.CurrentLanguage.Code)">
-                            <button type="button"
-                                    class="nav-language-option @(language.Code == L.CurrentLanguage.Code ? "active" : "")"
-                                    @onclick="() => SwitchLanguage(language.Code)">
-                                @language.NativeName
-                            </button>
-                        </li>
-                    }
-                </ul>
-            }
-        </div>
+    <div class="nav-footer" @onclick:stopPropagation="true">
+        <AuthorizeView Roles="Administrator">
+            <div class="nav-language-switch" role="group" aria-label="@L["Lang_Label"]">
+                @foreach (var language in LanguageSwitcherOrder)
+                {
+                    <button type="button"
+                            class="nav-language-segment @(language.Code == L.CurrentLanguage.Code ? "active" : "")"
+                            aria-pressed="@(language.Code == L.CurrentLanguage.Code)"
+                            @onclick="() => SwitchLanguage(language.Code)">
+                        @GetLanguageShortCode(language.Code)
+                    </button>
+                }
+            </div>
+        </AuthorizeView>
 
         <div class="nav-about">
-            <NavLink class="sidebar-about-link" href="/about">@L["About"]</NavLink>
+            <NavLink class="sidebar-about-link" href="/about" @onclick="CloseMobileNavAsync">@L["About"]</NavLink>
         </div>
+
+        <div class="nav-version">v1.0 · WWS</div>
     </div>
-</div>
+</aside>
 
 @code {
     [Inject]
     private NavigationManager NavigationManager { get; set; } = null!;
 
-    private bool IsLanguageMenuOpen { get; set; }
+    private static readonly LanguageOption[] LanguageSwitcherOrder =
+    [
+        LanguageOption.Russian,
+        LanguageOption.English,
+        LanguageOption.Japanese
+    ];
 
-    private void ToggleLanguageMenu()
+    private static string GetLanguageShortCode(string code) => code switch
     {
-        IsLanguageMenuOpen = !IsLanguageMenuOpen;
-    }
+        "en" => "EN",
+        "ru" => "RU",
+        "ja" => "JP",
+        _ => code.ToUpperInvariant()
+    };
 
     private void SwitchLanguage(string cultureCode)
     {
         if (cultureCode.Equals(L.CurrentLanguage.Code, StringComparison.OrdinalIgnoreCase))
         {
-            IsLanguageMenuOpen = false;
             return;
         }
 
-        IsLanguageMenuOpen = false;
         NavigationManager.NavigateTo(L.GetCultureSwitchUrl(cultureCode), forceLoad: true);
+    }
+
+    private async Task CloseMobileNavAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("ratchetTheme.closeMobileNav");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
     }
 }

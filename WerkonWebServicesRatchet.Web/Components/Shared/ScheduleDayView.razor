@@ -3,6 +3,7 @@
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
 @inject AppTimeZone AppTimeZone
+@inject AppPreferencesService AppPreferences
 
 @if (IsLoading)
 {
@@ -14,13 +15,13 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 }
 else
 {
-    <div class="schedule-split @(FullWidth ? "schedule-split-full" : string.Empty)">
-        <section class="schedule-panel">
+    <div class="schedule-split @(FullWidth ? "schedule-split-full" : string.Empty) @(HideRemindersPanel ? "schedule-split-visits-only" : string.Empty)">
+        <section class="schedule-panel schedule-panel-visits">
             <h4 class="schedule-section-title">@L["Schedule_VisitsSection"]</h4>
             <div class="schedule-scroll">
                 @if (Visits.Count == 0)
                 {
-                    <p>@(ShowTodayMessages ? L["Schedule_NoVisitsToday"] : L["Schedule_NoVisits"])</p>
+                    <p class="schedule-empty">@(ShowTodayMessages ? L["Schedule_NoVisitsToday"] : L["Schedule_NoVisits"])</p>
                 }
                 else
                 {
@@ -35,13 +36,12 @@ else
                                 <th>@L["Complaint"]</th>
                                 <th>@L["Schedule_Mechanic"]</th>
                                 <th>@L["Status"]</th>
-                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var visit in Visits)
                             {
-                                <tr>
+                                <tr class="table-row-action" @onclick="() => OpenVisit(visit.Id)">
                                     <td>@AppTimeZone.FromUtc(visit.VisitedAtUtc).ToString("HH:mm")</td>
                                     <td>@visit.ClientFullName</td>
                                     <td>@visit.ClientPhoneNumber</td>
@@ -50,12 +50,6 @@ else
                                     <td>@visit.CustomerComplaint</td>
                                     <td>@(visit.AssignedMechanicDisplayName ?? L["Visit_AssignedMechanic_None"])</td>
                                     <td>@L.GetVisitStatus(visit.Status)</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => OpenVisit(visit.Id)">
-                                            @L["Open"]
-                                        </button>
-                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -64,53 +58,49 @@ else
             </div>
         </section>
 
-        <section class="schedule-panel">
-            <h4 class="schedule-section-title">@L["Schedule_RemindersSection"]</h4>
-            <div class="schedule-scroll">
-                @if (Reminders.Count == 0)
-                {
-                    <p>@(ShowTodayMessages ? L["Schedule_NoRemindersToday"] : L["Schedule_NoReminders"])</p>
-                }
-                else
-                {
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>@L["Date"]</th>
-                                <th>@L["Client"]</th>
-                                <th>@L["Vehicle"]</th>
-                                <th>@L["Reminder_Note"]</th>
-                                <th>@L["Status"]</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var reminder in Reminders)
-                            {
+        @if (!HideRemindersPanel)
+        {
+            <section class="schedule-panel schedule-panel-reminders">
+                <h4 class="schedule-section-title">@L["Schedule_RemindersSection"]</h4>
+                <div class="schedule-scroll">
+                    @if (Reminders.Count == 0)
+                    {
+                        <p class="schedule-empty">@(ShowTodayMessages ? L["Schedule_NoRemindersToday"] : L["Schedule_NoReminders"])</p>
+                    }
+                    else
+                    {
+                        <table class="table">
+                            <thead>
                                 <tr>
-                                    <td>@AppTimeZone.FromUtc(reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</td>
-                                    <td>@reminder.ClientFullName</td>
-                                    <td>@reminder.VehicleBrand @reminder.VehicleModel (@reminder.LicensePlate)</td>
-                                    <td>@reminder.Note</td>
-                                    <td>
-                                        @if (reminder.IsClosed)
-                                        {
-                                            <span class="reminder-check" title="@L["Reminder_Closed"]">✔</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => OpenReminder(reminder.Id)">
-                                            @L["Open"]
-                                        </button>
-                                    </td>
+                                    <th>@L["Date"]</th>
+                                    <th>@L["Client"]</th>
+                                    <th>@L["Vehicle"]</th>
+                                    <th>@L["Reminder_Note"]</th>
+                                    <th>@L["Status"]</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-            </div>
-        </section>
+                            </thead>
+                            <tbody>
+                                @foreach (var reminder in Reminders)
+                                {
+                                    <tr class="table-row-action" @onclick="() => OpenReminder(reminder.Id)">
+                                        <td>@AppTimeZone.FromUtc(reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</td>
+                                        <td>@reminder.ClientFullName</td>
+                                        <td>@reminder.VehicleBrand @reminder.VehicleModel (@reminder.LicensePlate)</td>
+                                        <td>@reminder.Note</td>
+                                        <td>
+                                            @if (reminder.IsClosed)
+                                            {
+                                                <span class="reminder-check" title="@L["Reminder_Closed"]">✔</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </section>
+        }
     </div>
 }
 
@@ -129,6 +119,8 @@ else
     private bool IsLoading { get; set; }
     private string? ErrorMessage { get; set; }
 
+    private bool HideRemindersPanel => ShowTodayMessages && !IsLoading && Reminders.Count == 0;
+
     protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
@@ -142,7 +134,18 @@ else
             ErrorMessage = null;
 
             Visits = await ApiClient.GetVisitsByDayAsync(Date);
-            Reminders = await ApiClient.GetRemindersByDayAsync(Date);
+
+            if (ShowTodayMessages)
+            {
+                await AppPreferences.EnsureLoadedAsync(ApiClient);
+                var lookbackDays = AppPreferences.ReminderLookbackDays;
+                var fromDate = Date.AddDays(-(lookbackDays - 1));
+                Reminders = await ApiClient.GetRemindersByRangeAsync(fromDate, Date);
+            }
+            else
+            {
+                Reminders = await ApiClient.GetRemindersByDayAsync(Date);
+            }
         }
         catch (Exception ex)
         {

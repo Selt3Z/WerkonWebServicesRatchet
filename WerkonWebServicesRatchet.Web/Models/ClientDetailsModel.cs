@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Web.Models;
+namespace WerkonWebServicesRatchet.Web.Models;
 
 public sealed class ClientDetailsModel
 {
@@ -6,7 +6,10 @@ public sealed class ClientDetailsModel
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+
+    public bool HasDependentRecords { get; set; }
 
     public List<VehicleListItem> Vehicles { get; set; } = [];
 }

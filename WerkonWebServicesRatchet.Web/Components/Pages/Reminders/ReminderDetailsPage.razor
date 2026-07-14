@@ -31,46 +31,75 @@ else if (Reminder is null)
 }
 else
 {
-    <div class="card mb-4">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                <div>
-                    <p><strong>@L["Reminder_Date"]:</strong> @AppTimeZone.FromUtc(Reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</p>
-                    <p><strong>@L["Reminder_Note"]:</strong> @(string.IsNullOrWhiteSpace(Reminder.Note) ? "—" : Reminder.Note)</p>
-                </div>
-                @if (Reminder.IsClosed)
-                {
-                    <span class="reminder-check reminder-check-lg" title="@L["Reminder_Closed"]">✔</span>
-                }
+    <div class="detail-page">
+        <div class="entity-panel">
+            <div class="entity-header">
+                <h2 class="entity-title">
+                    @AppTimeZone.FromUtc(Reminder.ReminderAtUtc).ToString("yyyy-MM-dd")
+                    @if (Reminder.IsClosed)
+                    {
+                        <span class="reminder-check ms-1" title="@L["Reminder_Closed"]">✔</span>
+                    }
+                </h2>
             </div>
 
-            <p><strong>@L["Client"]:</strong> @Reminder.ClientFullName</p>
-            <p><strong>@L["Phone"]:</strong> @Reminder.ClientPhoneNumber</p>
-            <p><strong>@L["Vehicle"]:</strong> @Reminder.VehicleBrand @Reminder.VehicleModel</p>
-            <p><strong>@L["LicensePlate"]:</strong> @Reminder.LicensePlate</p>
+            <dl class="entity-meta">
+                @if (!string.IsNullOrWhiteSpace(Reminder.Note))
+                {
+                    <div class="entity-meta-item entity-meta-wide">
+                        <dt>@L["Reminder_Note"]</dt>
+                        <dd>@Reminder.Note</dd>
+                    </div>
+                }
+                <div class="entity-meta-item">
+                    <dt>@L["Client"]</dt>
+                    <dd>@Reminder.ClientFullName</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Phone"]</dt>
+                    <dd>@Reminder.ClientPhoneNumber</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Vehicle"]</dt>
+                    <dd>@Reminder.VehicleBrand @Reminder.VehicleModel</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["LicensePlate"]</dt>
+                    <dd>@Reminder.LicensePlate</dd>
+                </div>
+            </dl>
 
-            @if (Reminder.VisitId.HasValue)
+            @if (!string.IsNullOrWhiteSpace(ActionErrorMessage))
             {
-                <button class="btn btn-sm btn-outline-primary mt-2"
-                        @onclick="() => OpenVisit(Reminder.VisitId!.Value)">
-                    @L["OpenVisit"]
-                </button>
+                <div class="alert alert-danger mt-2 mb-0">@ActionErrorMessage</div>
             }
+
+            @if (!Reminder.IsClosed)
+            {
+                <div class="action-bar mt-2">
+                    <button class="btn btn-success"
+                            disabled="@IsBusy"
+                            @onclick="ConfirmCloseAsync">
+                        @(IsBusy ? L["Reminder_Closing"] : L["Reminder_Close"])
+                    </button>
+                </div>
+            }
+
+            <div class="action-bar action-bar-muted">
+                <button class="btn btn-outline-danger btn-sm"
+                        disabled="@IsBusy"
+                        @onclick="HardDeleteAsync">
+                    @L["Archive_HardDelete"]
+                </button>
+            </div>
         </div>
+
+        <footer class="page-footer-nav">
+            <button class="btn btn-secondary btn-sm" @onclick="BackToVehicle">
+                @L["BackToVehicle"]
+            </button>
+        </footer>
     </div>
-
-    @if (!Reminder.IsClosed)
-    {
-        <button class="btn btn-success me-2"
-                disabled="@IsClosing"
-                @onclick="ConfirmCloseAsync">
-            @(IsClosing ? L["Reminder_Closing"] : L["Reminder_Close"])
-        </button>
-    }
-
-    <button class="btn btn-secondary" @onclick="BackToSchedule">
-        @L["BackToSchedule"]
-    </button>
 }
 
 @code {
@@ -79,20 +108,22 @@ else
 
     private ReminderDetailsModel? Reminder { get; set; }
     private bool IsLoading { get; set; }
-    private bool IsClosing { get; set; }
+    private bool IsBusy { get; set; }
     private string? ErrorMessage { get; set; }
+    private string? ActionErrorMessage { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
-        await LoadReminderAsync();
+        await LoadAsync();
     }
 
-    private async Task LoadReminderAsync()
+    private async Task LoadAsync()
     {
         try
         {
             IsLoading = true;
             ErrorMessage = null;
+
             Reminder = await ApiClient.GetReminderAsync(Id);
         }
         catch (Exception ex)
@@ -103,6 +134,17 @@ else
         {
             IsLoading = false;
         }
+    }
+
+    private void BackToVehicle()
+    {
+        if (Reminder is not null)
+        {
+            NavigationManager.NavigateTo($"/vehicles/{Reminder.VehicleId}");
+            return;
+        }
+
+        NavigationManager.NavigateTo("/schedule");
     }
 
     private async Task ConfirmCloseAsync()
@@ -121,33 +163,67 @@ else
     {
         try
         {
-            IsClosing = true;
-            ErrorMessage = null;
+            IsBusy = true;
+            ActionErrorMessage = null;
 
-            Reminder = await ApiClient.CloseReminderAsync(Id);
+            var updated = await ApiClient.CloseReminderAsync(Id);
 
-            if (Reminder is null)
+            if (updated is null)
             {
-                ErrorMessage = L["FailedCloseReminder"];
+                ActionErrorMessage = L["FailedCloseReminder"];
+                return;
+            }
+
+            Reminder = updated;
+        }
+        catch (Exception ex)
+        {
+            ActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task HardDeleteAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", L["Reminder_DeleteConfirm"]);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            ActionErrorMessage = null;
+
+            var vehicleId = Reminder?.VehicleId;
+            var (success, error) = await ApiClient.DeleteReminderAsync(Id);
+
+            if (!success)
+            {
+                ActionErrorMessage = error ?? L["Reminder_DeleteFailed"];
+                return;
+            }
+
+            if (vehicleId.HasValue)
+            {
+                NavigationManager.NavigateTo($"/vehicles/{vehicleId.Value}");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/schedule");
             }
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            ActionErrorMessage = ex.Message;
         }
         finally
         {
-            IsClosing = false;
+            IsBusy = false;
         }
-    }
-
-    private void OpenVisit(Guid visitId)
-    {
-        NavigationManager.NavigateTo($"/visits/{visitId}");
-    }
-
-    private void BackToSchedule()
-    {
-        NavigationManager.NavigateTo("/schedule");
     }
 }

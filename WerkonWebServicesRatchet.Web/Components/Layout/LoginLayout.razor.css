@@ -4,27 +4,51 @@
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
-    background: linear-gradient(160deg, #1b2838 0%, #2f3f54 45%, #1f2937 100%);
+    background:
+        radial-gradient(ellipse 70% 50% at 15% 20%, rgba(90, 159, 212, 0.35) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 85% 80%, rgba(30, 84, 144, 0.3) 0%, transparent 50%),
+        linear-gradient(155deg, #0c1829 0%, #1a3050 38%, #0f1f35 100%);
 }
 
 .login-layout ::deep .login-card {
     width: 100%;
-    max-width: 360px;
-    padding: 2rem;
-    border-radius: 0.75rem;
-    background-color: #fff;
-    box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.25);
+    max-width: 400px;
+    padding: 2.25rem 2rem;
+    border-radius: 8px;
+    background: var(--r-surface, #fff);
+    border: 1px solid var(--r-border, #d8e0ea);
+    border-top-color: rgba(255, 255, 255, 0.7);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
 .login-layout ::deep .login-logo-wrap {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
     text-align: center;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--r-border-subtle, #e8edf3);
 }
 
-/* Размер логотипа на экране входа: меняйте max-width */
 .login-layout ::deep .login-logo {
     display: block;
     max-width: 100%;
     height: auto;
     margin: 0 auto;
+}
+
+.login-layout ::deep .btn-primary {
+    padding: 0.6rem 1rem;
+    font-size: 0.95rem;
+    border-radius: 5px;
+    margin-top: 0.25rem;
+}
+
+[data-theme="dark"] .login-layout ::deep .login-card {
+    background: var(--r-surface-elevated, #1a2438);
+    border-color: var(--r-border, #2a3650);
+    border-top-color: rgba(255, 255, 255, 0.06);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 16px 40px rgba(0, 0, 0, 0.45);
 }

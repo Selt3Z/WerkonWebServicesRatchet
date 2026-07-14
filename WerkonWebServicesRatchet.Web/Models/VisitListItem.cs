@@ -3,6 +3,7 @@ namespace WerkonWebServicesRatchet.Web.Models;
 public sealed class VisitListItem
 {
     public Guid Id { get; set; }
+    public long Number { get; set; }
     public Guid VehicleId { get; set; }
     public DateTime VisitedAtUtc { get; set; }
     public int? MileageAtVisit { get; set; }

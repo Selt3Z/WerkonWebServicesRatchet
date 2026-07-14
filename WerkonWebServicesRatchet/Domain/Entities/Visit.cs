@@ -4,6 +4,8 @@ public sealed class Visit
 {
     public Guid Id { get; set; }
 
+    public long Number { get; set; }
+
     public Guid VehicleId { get; set; }
     public Vehicle Vehicle { get; set; } = null!;
 
@@ -17,6 +19,9 @@ public sealed class Visit
 
     public VisitStatus Status { get; set; }
     public List<VisitServiceItem> ServiceItems { get; set; } = [];
+
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAtUtc { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 }

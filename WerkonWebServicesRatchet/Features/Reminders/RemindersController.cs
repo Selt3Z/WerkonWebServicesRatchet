@@ -40,7 +40,46 @@ public sealed class RemindersController : ControllerBase
                 Id = x.Id,
                 VehicleId = x.VehicleId,
                 ClientId = x.Vehicle.ClientId,
-                VisitId = x.VisitId,
+                ReminderAtUtc = x.ReminderAtUtc,
+                Note = x.Note,
+                IsClosed = x.IsClosed,
+                ClientFullName = x.Vehicle.Client.FullName,
+                ClientPhoneNumber = x.Vehicle.Client.PhoneNumber,
+                VehicleBrand = x.Vehicle.Brand,
+                VehicleModel = x.Vehicle.Model,
+                LicensePlate = x.Vehicle.LicensePlate
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(response);
+    }
+
+    [HttpGet("by-range")]
+    public async Task<ActionResult<List<ReminderByDayItemResponse>>> GetByRange(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken cancellationToken)
+    {
+        var endDate = to ?? _appTimeZone.GetToday();
+        var startDate = from ?? endDate;
+
+        if (startDate > endDate)
+        {
+            return BadRequest("'from' must be on or before 'to'.");
+        }
+
+        var (startUtc, _) = _appTimeZone.GetDayRangeUtc(startDate);
+        var (_, endUtc) = _appTimeZone.GetDayRangeUtc(endDate);
+
+        var response = await _dbContext.Reminders
+            .Where(x => x.ReminderAtUtc >= startUtc && x.ReminderAtUtc < endUtc)
+            .OrderBy(x => x.ReminderAtUtc)
+            .ThenBy(x => x.CreatedAtUtc)
+            .Select(x => new ReminderByDayItemResponse
+            {
+                Id = x.Id,
+                VehicleId = x.VehicleId,
+                ClientId = x.Vehicle.ClientId,
                 ReminderAtUtc = x.ReminderAtUtc,
                 Note = x.Note,
                 IsClosed = x.IsClosed,
@@ -84,17 +123,6 @@ public sealed class RemindersController : ControllerBase
             return NotFound("Vehicle not found.");
         }
 
-        if (request.VisitId.HasValue)
-        {
-            var visitValid = await _dbContext.Visits
-                .AnyAsync(x => x.Id == request.VisitId.Value && x.VehicleId == request.VehicleId, cancellationToken);
-
-            if (!visitValid)
-            {
-                return BadRequest("Visit does not belong to the specified vehicle.");
-            }
-        }
-
         if (request.ReminderDate == default)
         {
             return BadRequest("Reminder date is required.");
@@ -104,7 +132,6 @@ public sealed class RemindersController : ControllerBase
         {
             Id = Guid.NewGuid(),
             VehicleId = request.VehicleId,
-            VisitId = request.VisitId,
             ReminderAtUtc = _appTimeZone.ToUtcStartOfDay(request.ReminderDate),
             Note = request.Note.Trim(),
             IsClosed = false,
@@ -147,6 +174,24 @@ public sealed class RemindersController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize(Roles = $"{AppRoles.Administrator},{AppRoles.Manager},{AppRoles.Mechanic}")]
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var reminder = await _dbContext.Reminders
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (reminder is null)
+        {
+            return NotFound();
+        }
+
+        _dbContext.Reminders.Remove(reminder);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
+    }
+
     private IQueryable<ReminderDetailsResponse> MapDetailsQuery() =>
         _dbContext.Reminders
             .Select(x => new ReminderDetailsResponse
@@ -154,7 +199,6 @@ public sealed class RemindersController : ControllerBase
                 Id = x.Id,
                 VehicleId = x.VehicleId,
                 ClientId = x.Vehicle.ClientId,
-                VisitId = x.VisitId,
                 ReminderAtUtc = x.ReminderAtUtc,
                 Note = x.Note,
                 IsClosed = x.IsClosed,
@@ -166,5 +210,4 @@ public sealed class RemindersController : ControllerBase
                 VehicleModel = x.Vehicle.Model,
                 LicensePlate = x.Vehicle.LicensePlate
             });
-
 }

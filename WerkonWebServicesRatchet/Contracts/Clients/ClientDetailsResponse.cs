@@ -1,4 +1,4 @@
-﻿using WerkonWebServicesRatchet.Contracts.Vehicles;
+using WerkonWebServicesRatchet.Contracts.Vehicles;
 
 namespace WerkonWebServicesRatchet.Contracts.Clients;
 
@@ -8,7 +8,10 @@ public sealed class ClientDetailsResponse
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+
+    public bool HasDependentRecords { get; set; }
 
     public List<VehicleResponse> Vehicles { get; set; } = [];
 }

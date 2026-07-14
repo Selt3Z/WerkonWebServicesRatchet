@@ -35,7 +35,7 @@ public sealed class AuditEntryFactory
             var action = entry.State switch
             {
                 EntityState.Added => AuditActions.Created,
-                EntityState.Modified => AuditActions.Updated,
+                EntityState.Modified => GetModifiedAction(entry),
                 EntityState.Deleted => AuditActions.Deleted,
                 _ => null
             };
@@ -70,6 +70,20 @@ public sealed class AuditEntryFactory
         }
 
         return auditEntries;
+    }
+
+    private static string GetModifiedAction(EntityEntry entry)
+    {
+        var isArchivedProperty = entry.Metadata.FindProperty("IsArchived") is null
+            ? null
+            : entry.Property("IsArchived");
+
+        if (isArchivedProperty is { IsModified: true } && isArchivedProperty.CurrentValue is bool isArchived)
+        {
+            return isArchived ? AuditActions.Archived : AuditActions.Restored;
+        }
+
+        return AuditActions.Updated;
     }
 
     private bool TryMapEntry(

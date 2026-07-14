@@ -267,12 +267,18 @@ namespace WerkonWebServicesRatchet.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
@@ -284,6 +290,8 @@ namespace WerkonWebServicesRatchet.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FullName");
+
+                    b.HasIndex("IsArchived");
 
                     b.HasIndex("PhoneNumber");
 
@@ -315,16 +323,11 @@ namespace WerkonWebServicesRatchet.Migrations
                     b.Property<Guid>("VehicleId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("VisitId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ReminderAtUtc");
 
                     b.HasIndex("VehicleId");
-
-                    b.HasIndex("VisitId");
 
                     b.ToTable("Reminders");
                 });
@@ -335,6 +338,9 @@ namespace WerkonWebServicesRatchet.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Brand")
                         .IsRequired()
                         .HasColumnType("text");
@@ -344,6 +350,9 @@ namespace WerkonWebServicesRatchet.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("LicensePlate")
                         .IsRequired()
@@ -363,6 +372,8 @@ namespace WerkonWebServicesRatchet.Migrations
 
                     b.HasIndex("ClientId");
 
+                    b.HasIndex("IsArchived");
+
                     b.HasIndex("LicensePlate");
 
                     b.HasIndex("Vin");
@@ -376,6 +387,9 @@ namespace WerkonWebServicesRatchet.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("AssignedMechanicUserId")
                         .HasColumnType("uuid");
 
@@ -386,11 +400,20 @@ namespace WerkonWebServicesRatchet.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("MechanicComment")
                         .HasColumnType("text");
 
                     b.Property<int?>("MileageAtVisit")
                         .HasColumnType("integer");
+
+                    b.Property<long>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Number"));
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -404,6 +427,11 @@ namespace WerkonWebServicesRatchet.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedMechanicUserId");
+
+                    b.HasIndex("IsArchived");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
 
                     b.HasIndex("VehicleId");
 
@@ -573,14 +601,7 @@ namespace WerkonWebServicesRatchet.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("WerkonWebServicesRatchet.Domain.Entities.Visit", "Visit")
-                        .WithMany()
-                        .HasForeignKey("VisitId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("Vehicle");
-
-                    b.Navigation("Visit");
                 });
 
             modelBuilder.Entity("WerkonWebServicesRatchet.Domain.Entities.Vehicle", b =>

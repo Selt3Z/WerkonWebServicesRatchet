@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.CatalogServices;
+using WerkonWebServicesRatchet.Contracts.Common;
 using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
@@ -21,9 +22,11 @@ public sealed class CatalogServicesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<CatalogServiceResponse>>> GetAll(
+    public async Task<ActionResult<PagedResponse<CatalogServiceResponse>>> GetAll(
         [FromQuery] string? search,
         [FromQuery] bool activeOnly = false,
+        [FromQuery] int? skip = null,
+        [FromQuery] int? take = null,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.CatalogServices.AsQueryable();
@@ -42,10 +45,13 @@ public sealed class CatalogServicesController : ControllerBase
                 || (x.Category != null && x.Category.ToLower().Contains(normalizedSearch)));
         }
 
+        var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);
+
         var response = await query
             .OrderBy(x => x.Name)
+            .ThenBy(x => x.Id)
             .Select(x => MapResponse(x))
-            .ToListAsync(cancellationToken);
+            .ToPagedResponseAsync(normalizedSkip, normalizedTake, cancellationToken);
 
         return Ok(response);
     }
@@ -69,7 +75,7 @@ public sealed class CatalogServicesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AuthorizationPolicies.ManageServiceCatalog)]
+    [Authorize(Policy = AuthorizationPolicies.CreateCatalogService)]
     public async Task<ActionResult<CatalogServiceResponse>> Create(
         SaveCatalogServiceRequest request,
         CancellationToken cancellationToken)

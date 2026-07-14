@@ -1,6 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Infrastructure.Audit;
+using WerkonWebServicesRatchet.Infrastructure.Authorization;
+using WerkonWebServicesRatchet.Infrastructure.Backups;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
 using WerkonWebServicesRatchet.Infrastructure.Pdf;
@@ -16,8 +20,13 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AuditEntryFactory>();
 builder.Services.AddScoped<AuditSaveChangesInterceptor>();
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' is not configured. " +
+        "Set the ConnectionStrings__DefaultConnection environment variable (see .env.example).");
+
 builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+    options.UseNpgsql(connectionString)
         .AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>()));
 
 builder.Services
@@ -68,14 +77,31 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AuthorizationPolicies.ManageServiceCatalog, policy =>
         policy.RequireRole(AppRoles.CanManageServiceCatalog));
 
+    options.AddPolicy(AuthorizationPolicies.CreateCatalogService, policy =>
+        policy.Requirements.Add(new CreateCatalogServiceRequirement()));
+
     options.AddPolicy(AuthorizationPolicies.AssignVisitMechanic, policy =>
         policy.RequireRole(AppRoles.CanAssignVisitMechanic));
+
+    options.AddPolicy(AuthorizationPolicies.ViewAuditLog, policy =>
+        policy.RequireRole(AppRoles.CanViewAuditLog));
+
+    options.AddPolicy(AuthorizationPolicies.HardDeleteRecords, policy =>
+        policy.Requirements.Add(new HardDeleteRequirement()));
 });
+
+builder.Services.AddSingleton<IAuthorizationHandler, HardDeleteAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, CreateCatalogServiceAuthorizationHandler>();
+builder.Services.AddScoped<BackupStatusReader>();
+builder.Services.AddHostedService<AuditRetentionHostedService>();
 
 builder.Services.AddSingleton<AppTimeZone>();
 builder.Services.AddSingleton<VisitWorkOrderPdfGenerator>();
 builder.Services.AddScoped<AppSettingsService>();
 builder.Services.AddHostedService<IdentitySeedHostedService>();
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -84,11 +110,26 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+if (!builder.Configuration.GetValue<bool>("DisableHttpsRedirection"))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;

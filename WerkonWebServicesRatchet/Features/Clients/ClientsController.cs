@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Clients;
+using WerkonWebServicesRatchet.Contracts.Common;
 using WerkonWebServicesRatchet.Contracts.Vehicles;
 using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
@@ -22,12 +23,17 @@ public sealed class ClientsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<ClientResponse>>> GetAll(
+    public async Task<ActionResult<PagedResponse<ClientResponse>>> GetAll(
         [FromQuery] string? name,
         [FromQuery] string? phone,
-        CancellationToken cancellationToken)
+        [FromQuery] bool includeArchived = false,
+        [FromQuery] int? skip = null,
+        [FromQuery] int? take = null,
+        CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Clients.AsQueryable();
+        var query = includeArchived
+            ? _dbContext.Clients.IgnoreQueryFilters().AsQueryable()
+            : _dbContext.Clients.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(name))
         {
@@ -41,17 +47,21 @@ public sealed class ClientsController : ControllerBase
             query = query.Where(x => x.PhoneNumber.ToLower().Contains(normalizedPhone));
         }
 
+        var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);
+
         var response = await query
             .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
             .Select(x => new ClientResponse
             {
                 Id = x.Id,
                 FullName = x.FullName,
                 PhoneNumber = x.PhoneNumber,
                 Notes = x.Notes,
+                IsArchived = x.IsArchived,
                 CreatedAtUtc = x.CreatedAtUtc
             })
-            .ToListAsync(cancellationToken);
+            .ToPagedResponseAsync(normalizedSkip, normalizedTake, cancellationToken);
 
         return Ok(response);
     }
@@ -60,6 +70,7 @@ public sealed class ClientsController : ControllerBase
     public async Task<ActionResult<ClientResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var response = await _dbContext.Clients
+            .IgnoreQueryFilters()
             .Where(x => x.Id == id)
             .Select(x => new ClientResponse
             {
@@ -67,6 +78,7 @@ public sealed class ClientsController : ControllerBase
                 FullName = x.FullName,
                 PhoneNumber = x.PhoneNumber,
                 Notes = x.Notes,
+                IsArchived = x.IsArchived,
                 CreatedAtUtc = x.CreatedAtUtc
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -178,7 +190,8 @@ public sealed class ClientsController : ControllerBase
     CancellationToken cancellationToken)
     {
         var client = await _dbContext.Clients
-            .Include(x => x.Vehicles)
+            .IgnoreQueryFilters()
+            .Include(x => x.Vehicles.Where(v => !v.IsArchived))
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (client is null)
@@ -186,13 +199,19 @@ public sealed class ClientsController : ControllerBase
             return NotFound();
         }
 
+        var hasDependentRecords = await _dbContext.Vehicles
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.ClientId == id, cancellationToken);
+
         var response = new ClientDetailsResponse
         {
             Id = client.Id,
             FullName = client.FullName,
             PhoneNumber = client.PhoneNumber,
             Notes = client.Notes,
+            IsArchived = client.IsArchived,
             CreatedAtUtc = client.CreatedAtUtc,
+            HasDependentRecords = hasDependentRecords,
             Vehicles = client.Vehicles
                 .OrderBy(x => x.CreatedAtUtc)
                 .Select(x => new VehicleResponse
@@ -204,11 +223,72 @@ public sealed class ClientsController : ControllerBase
                     Year = x.Year,
                     LicensePlate = x.LicensePlate,
                     Vin = x.Vin,
+                    IsArchived = x.IsArchived,
                     CreatedAtUtc = x.CreatedAtUtc
                 })
                 .ToList()
         };
 
         return Ok(response);
+    }
+
+    [HttpPatch("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
+        await SetArchivedAsync(id, archived: true, cancellationToken);
+
+    [HttpPatch("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken) =>
+        await SetArchivedAsync(id, archived: false, cancellationToken);
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.HardDeleteRecords)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var client = await _dbContext.Clients
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        var hasVehicles = await _dbContext.Vehicles
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.ClientId == id, cancellationToken);
+
+        if (hasVehicles)
+        {
+            return Conflict(new { message = "Client has vehicles and cannot be deleted. Archive it instead." });
+        }
+
+        _dbContext.Clients.Remove(client);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
+    }
+
+    private async Task<IActionResult> SetArchivedAsync(
+        Guid id,
+        bool archived,
+        CancellationToken cancellationToken)
+    {
+        var client = await _dbContext.Clients
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        if (client.IsArchived != archived)
+        {
+            client.IsArchived = archived;
+            client.ArchivedAtUtc = archived ? DateTime.UtcNow : null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return NoContent();
     }
 }

@@ -1,0 +1,163 @@
+@page "/system-status"
+@attribute [RequireAdministrator]
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject AppTimeZone AppTimeZone
+
+<PageTitle>@L["SystemStatus_Title"]</PageTitle>
+
+<h1>@L["SystemStatus_Title"]</h1>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Status is null)
+{
+    <p>@L["SystemStatus_LoadFailed"]</p>
+}
+else
+{
+    <section class="entity-panel">
+        <dl class="entity-meta">
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_Version"]</dt>
+                <dd>@Status.ApplicationVersion</dd>
+            </div>
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_Database"]</dt>
+                <dd>@(Status.DatabaseHealthy ? L["SystemStatus_Healthy"] : L["SystemStatus_Unhealthy"])</dd>
+            </div>
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_ServerTimeUtc"]</dt>
+                <dd>@FormatUtc(Status.ServerTimeUtc)</dd>
+            </div>
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_AppTimeZone"]</dt>
+                <dd>@Status.AppTimeZoneId</dd>
+            </div>
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_ServerLocalTime"]</dt>
+                <dd>@Status.ServerLocalTime</dd>
+            </div>
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_AuditCount"]</dt>
+                <dd>@Status.AuditLogEntryCount</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="entity-panel mt-4">
+        <h2 class="section-title">@L["Settings_Backup_Title"]</h2>
+        @if (!Status.Backup.IsConfigured)
+        {
+            <p class="system-status-note">@L["Settings_Backup_NotConfigured"]</p>
+        }
+        else
+        {
+            <dl class="entity-meta">
+                <div class="entity-meta-item">
+                    <dt>@L["Settings_Backup_LastRun"]</dt>
+                    <dd>@FormatBackupTime(Status.Backup.LastRunUtc)</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Settings_Backup_Status"]</dt>
+                    <dd>@FormatBackupStatus(Status.Backup.LastStatus)</dd>
+                </div>
+                <div class="entity-meta-item entity-meta-wide">
+                    <dt>@L["Settings_Backup_Message"]</dt>
+                    <dd>@(Status.Backup.LastMessage ?? "—")</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Settings_Backup_Size"]</dt>
+                    <dd>@FormatBackupSize(Status.Backup.LastBackupSizeBytes)</dd>
+                </div>
+                <div class="entity-meta-item">
+                    <dt>@L["Settings_Backup_Restic"]</dt>
+                    <dd>@(Status.Backup.ResticEnabled ? L["Yes"] : L["No"])</dd>
+                </div>
+            </dl>
+        }
+        <p class="system-status-note">@L["Settings_Backup_Help"]</p>
+        <p class="system-status-note">@L["Settings_Restic_Help"]</p>
+    </section>
+}
+
+@code {
+    private SystemStatusModel? Status { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Status = await ApiClient.GetSystemStatusAsync();
+
+            if (Status is null)
+            {
+                ErrorMessage = L["SystemStatus_LoadFailed"];
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private string FormatUtc(string value)
+    {
+        if (!DateTime.TryParse(value, out var utc))
+        {
+            return value;
+        }
+
+        return DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-dd HH:mm:ss") + " UTC";
+    }
+
+    private string FormatBackupTime(string? utcValue)
+    {
+        if (string.IsNullOrWhiteSpace(utcValue) || !DateTime.TryParse(utcValue, out var utc))
+        {
+            return "—";
+        }
+
+        return AppTimeZone.FromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private string FormatBackupStatus(string? status) => status switch
+    {
+        "success" => L["Settings_Backup_Status_Success"],
+        "error" => L["Settings_Backup_Status_Error"],
+        _ => status ?? "—"
+    };
+
+    private static string FormatBackupSize(long? bytes)
+    {
+        if (bytes is null or <= 0)
+        {
+            return "—";
+        }
+
+        if (bytes >= 1024 * 1024)
+        {
+            return $"{bytes / (1024.0 * 1024.0):0.##} MB";
+        }
+
+        if (bytes >= 1024)
+        {
+            return $"{bytes / 1024.0:0.##} KB";
+        }
+
+        return $"{bytes} B";
+    }
+}

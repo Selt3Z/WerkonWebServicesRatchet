@@ -41,13 +41,20 @@ public sealed class IdentitySeedHostedService : IHostedService
         }
 
         var adminUserName = _configuration["Seed:AdminUserName"] ?? "admin";
-        var adminPassword = _configuration["Seed:AdminPassword"] ?? "Admin123!";
+        var adminPassword = _configuration["Seed:AdminPassword"];
         var adminDisplayName = _configuration["Seed:AdminDisplayName"] ?? "Administrator";
 
         var adminUser = await userManager.FindByNameAsync(adminUserName);
 
         if (adminUser is null)
         {
+            if (string.IsNullOrWhiteSpace(adminPassword))
+            {
+                throw new InvalidOperationException(
+                    $"Seed admin user '{adminUserName}' does not exist and 'Seed:AdminPassword' is not configured. " +
+                    "Set the Seed__AdminPassword environment variable (see .env.example).");
+            }
+
             adminUser = new ApplicationUser
             {
                 Id = Guid.NewGuid(),
@@ -106,8 +113,38 @@ public sealed class IdentitySeedHostedService : IHostedService
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.CurrencyCode, AppSettingsDefaults.CurrencyCode, cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.DefaultVisitStatus, AppSettingsDefaults.DefaultVisitStatus, cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.ReminderLookbackDays, AppSettingsDefaults.ReminderLookbackDays.ToString(), cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.HideArchivedByDefault, AppSettingsDefaults.HideArchivedByDefault.ToString(), cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.ManagerCanHardDelete, AppSettingsDefaults.ManagerCanHardDelete.ToString(), cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.MechanicCanAddCatalogServices, AppSettingsDefaults.MechanicCanAddCatalogServices.ToString(), cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.AuditRetentionDays, AppSettingsDefaults.AuditRetentionDays.ToString(), cancellationToken);
+        await SeedSettingIfMissingAsync(dbContext, AppSettingKeys.ListPageSize, AppSettingsDefaults.ListPageSize.ToString(), cancellationToken);
+
         var appTimeZone = scope.ServiceProvider.GetRequiredService<AppTimeZone>();
         appTimeZone.SetTimeZoneId(timeZoneSetting.Value);
+    }
+
+    private static async Task SeedSettingIfMissingAsync(
+        AppDbContext dbContext,
+        string key,
+        string value,
+        CancellationToken cancellationToken)
+    {
+        var exists = await dbContext.AppSettings.AnyAsync(x => x.Key == key, cancellationToken);
+
+        if (exists)
+        {
+            return;
+        }
+
+        dbContext.AppSettings.Add(new AppSetting
+        {
+            Key = key,
+            Value = value
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

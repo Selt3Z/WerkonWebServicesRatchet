@@ -1,8 +1,13 @@
 @page "/clients/{Id:guid}"
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AppPreferencesService AppPreferences
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@L["ClientDetails_Title"]</PageTitle>
 
@@ -22,58 +27,103 @@ else if (Client is null)
 }
 else
 {
-    <div class="mb-4">
-        <h3>@Client.FullName</h3>
-        <p><strong>@L["Phone"]:</strong> @Client.PhoneNumber</p>
-        <p><strong>@L["Notes"]:</strong> @Client.Notes</p>
+    <div class="detail-page">
+        <div class="entity-panel">
+            <div class="entity-header">
+                <h2 class="entity-title">
+                    @Client.FullName
+                    @if (Client.IsArchived)
+                    {
+                        <span class="badge bg-secondary ms-1">@L["Archive_Badge"]</span>
+                    }
+                </h2>
+            </div>
 
-        <button class="btn btn-primary" @onclick="EditClient">@L["Client_Edit"]</button>
-        <button class="btn btn-success" @onclick="AddVehicle">@L["Client_AddVehicle"]</button>
-    </div>
-
-    <h4>@L["Vehicles"]</h4>
-
-    @if (Client.Vehicles.Count == 0)
-    {
-        <p>@L["Vehicles_None"]</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>@L["Brand"]</th>
-                    <th>@L["Model"]</th>
-                    <th>@L["Year"]</th>
-                    <th>@L["LicensePlate"]</th>
-                    <th>@L["Vin"]</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var vehicle in Client.Vehicles)
+            <dl class="entity-meta">
+                <div class="entity-meta-item">
+                    <dt>@L["Phone"]</dt>
+                    <dd>@Client.PhoneNumber</dd>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Client.Notes))
                 {
-                    <tr>
-                        <td>@vehicle.Brand</td>
-                        <td>@vehicle.Model</td>
-                        <td>@vehicle.Year</td>
-                        <td>@vehicle.LicensePlate</td>
-                        <td>@vehicle.Vin</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary"
-                                    @onclick="() => OpenVehicle(vehicle.Id)">
-                                @L["Open"]
-                            </button>
-                        </td>
-                    </tr>
+                    <div class="entity-meta-item entity-meta-wide">
+                        <dt>@L["Notes"]</dt>
+                        <dd>@Client.Notes</dd>
+                    </div>
                 }
-            </tbody>
-        </table>
-    }
+            </dl>
 
-    <button class="btn btn-secondary" @onclick="BackToClients">
-        @L["BackToClients"]
-    </button>
+            @if (!string.IsNullOrWhiteSpace(ActionErrorMessage))
+            {
+                <div class="alert alert-danger mt-2 mb-0">@ActionErrorMessage</div>
+            }
+
+            @if (Client.IsArchived)
+            {
+                <div class="action-bar mt-2">
+                    <button class="btn btn-outline-success" disabled="@IsBusy" @onclick="RestoreAsync">@L["Archive_Restore"]</button>
+                </div>
+            }
+            else
+            {
+                <div class="action-bar mt-2">
+                    <button class="btn btn-primary" @onclick="EditClient">@L["Client_Edit"]</button>
+                    <button class="btn btn-success" @onclick="AddVehicle">@L["Client_AddVehicle"]</button>
+                </div>
+                <div class="action-bar action-bar-muted">
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@IsBusy" @onclick="ArchiveAsync">@L["Archive_Archive"]</button>
+                </div>
+            }
+
+            @if (CanHardDelete && Client is not null && !Client.HasDependentRecords)
+            {
+                <div class="action-bar action-bar-muted">
+                    <button class="btn btn-outline-danger btn-sm" disabled="@IsBusy" @onclick="HardDeleteAsync">@L["Archive_HardDelete"]</button>
+                </div>
+            }
+        </div>
+
+        <section class="page-section">
+            <h3 class="section-title">@L["Vehicles"]</h3>
+
+            @if (Client.Vehicles.Count == 0)
+            {
+                <p>@L["Vehicles_None"]</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@L["Brand"]</th>
+                            <th>@L["Model"]</th>
+                            <th>@L["Year"]</th>
+                            <th>@L["LicensePlate"]</th>
+                            <th>@L["Vin"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var vehicle in Client.Vehicles)
+                        {
+                            <tr class="table-row-action" @onclick="() => OpenVehicle(vehicle.Id)">
+                                <td>@vehicle.Brand</td>
+                                <td>@vehicle.Model</td>
+                                <td>@vehicle.Year</td>
+                                <td>@vehicle.LicensePlate</td>
+                                <td>@vehicle.Vin</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <footer class="page-footer-nav">
+            <button class="btn btn-secondary btn-sm" @onclick="BackToClients">
+                @L["BackToClients"]
+            </button>
+        </footer>
+    </div>
 }
 
 @code {
@@ -82,11 +132,24 @@ else
 
     private ClientDetailsModel? Client { get; set; }
     private bool IsLoading { get; set; }
+    private bool IsBusy { get; set; }
+    private bool CanHardDelete { get; set; }
     private string? ErrorMessage { get; set; }
+    private string? ActionErrorMessage { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
+        await ResolveHardDeleteAccessAsync();
         await LoadClientAsync();
+    }
+
+    private async Task ResolveHardDeleteAccessAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+
+        CanHardDelete = authState.User.IsInRole("Administrator")
+            || (authState.User.IsInRole("Manager") && AppPreferences.ManagerCanHardDelete);
     }
 
     private async Task LoadClientAsync()
@@ -126,5 +189,77 @@ else
     private void AddVehicle()
     {
         NavigationManager.NavigateTo($"/clients/{Id}/vehicles/new");
+    }
+
+    private async Task ArchiveAsync()
+    {
+        await SetArchivedAsync(archived: true);
+    }
+
+    private async Task RestoreAsync()
+    {
+        await SetArchivedAsync(archived: false);
+    }
+
+    private async Task SetArchivedAsync(bool archived)
+    {
+        try
+        {
+            IsBusy = true;
+            ActionErrorMessage = null;
+
+            var (success, error) = archived
+                ? await ApiClient.ArchiveClientAsync(Id)
+                : await ApiClient.RestoreClientAsync(Id);
+
+            if (!success)
+            {
+                ActionErrorMessage = error;
+                return;
+            }
+
+            await LoadClientAsync();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task HardDeleteAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", L["Archive_HardDeleteConfirm"]);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            ActionErrorMessage = null;
+
+            var (success, error) = await ApiClient.DeleteClientAsync(Id);
+
+            if (!success)
+            {
+                ActionErrorMessage = error;
+                return;
+            }
+
+            NavigationManager.NavigateTo("/clients");
+        }
+        catch (Exception ex)
+        {
+            ActionErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 }

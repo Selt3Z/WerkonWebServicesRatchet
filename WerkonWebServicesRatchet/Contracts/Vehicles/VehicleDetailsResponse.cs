@@ -1,4 +1,4 @@
-﻿using WerkonWebServicesRatchet.Contracts.Visits;
+using WerkonWebServicesRatchet.Contracts.Visits;
 
 namespace WerkonWebServicesRatchet.Contracts.Vehicles;
 
@@ -14,7 +14,12 @@ public sealed class VehicleDetailsResponse
     public int? Year { get; set; }
     public string LicensePlate { get; set; } = string.Empty;
     public string? Vin { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 
+    public bool HasDependentRecords { get; set; }
+
     public List<VisitResponse> Visits { get; set; } = [];
+
+    public List<VehicleReminderItemResponse> Reminders { get; set; } = [];
 }

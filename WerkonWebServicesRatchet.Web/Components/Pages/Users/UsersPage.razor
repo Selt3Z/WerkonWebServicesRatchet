@@ -2,14 +2,16 @@
 @using WerkonWebServicesRatchet.Web.Authorization
 @using WerkonWebServicesRatchet.Web.Models
 @attribute [RequireAdministrator]
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AppPreferencesService AppPreferences
 
 <PageTitle>@L["Users_Title"]</PageTitle>
 
 <h1>@L["Users_Title"]</h1>
 
-<div class="mb-3">
+<div class="action-bar mb-3">
     <button class="btn btn-success" @onclick="OpenNewUser">@L["Users_Add"]</button>
 </div>
 
@@ -39,35 +41,42 @@ else
         <tbody>
             @foreach (var user in Users)
             {
-                <tr>
+                <tr class="table-row-action" @onclick="() => EditUser(user.Id)">
                     <td>@user.UserName</td>
                     <td>@user.DisplayName</td>
                     <td>@L.GetRoleDisplayName(user.Role)</td>
-                    <td class="text-end text-nowrap">
-                        <button class="btn btn-sm btn-outline-primary me-1"
-                                @onclick="() => EditUser(user.Id)">
-                            @L["Edit"]
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger"
+                    <td class="text-end text-nowrap table-row-actions" @onclick:stopPropagation="true">
+                        <button type="button"
+                                class="btn-icon-delete"
                                 disabled="@IsDeleting"
+                                title="@L["Delete"]"
+                                aria-label="@L["Delete"]"
                                 @onclick="() => DeleteUserAsync(user.Id)">
-                            @L["Delete"]
+                            <svg class="btn-icon-delete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+                            </svg>
                         </button>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
+
+    <InfiniteScroll HasMore="HasMore" IsLoading="IsLoadingMore" OnLoadMore="LoadMoreAsync" />
 }
 
 @code {
     private List<UserListItem> Users { get; set; } = [];
+    private int PageSize => AppPreferences.ListPageSize;
     private bool IsLoading { get; set; }
+    private bool IsLoadingMore { get; set; }
+    private bool HasMore { get; set; }
     private bool IsDeleting { get; set; }
     private string? ErrorMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
         await LoadUsersAsync();
     }
 
@@ -77,7 +86,10 @@ else
         {
             IsLoading = true;
             ErrorMessage = null;
-            Users = await ApiClient.GetUsersAsync();
+
+            var page = await ApiClient.GetUsersAsync(skip: 0, take: PageSize);
+            Users = page.Items;
+            HasMore = page.HasMore;
         }
         catch (Exception ex)
         {
@@ -86,6 +98,31 @@ else
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || !HasMore)
+        {
+            return;
+        }
+
+        try
+        {
+            IsLoadingMore = true;
+
+            var page = await ApiClient.GetUsersAsync(skip: Users.Count, take: PageSize);
+            Users.AddRange(page.Items);
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingMore = false;
         }
     }
 

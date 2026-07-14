@@ -5,6 +5,7 @@ namespace WerkonWebServicesRatchet.Contracts.Visits;
 public sealed class VisitDetailsResponse
 {
     public Guid Id { get; set; }
+    public long Number { get; set; }
     public Guid VehicleId { get; set; }
     public DateTime VisitedAtUtc { get; set; }
     public int? MileageAtVisit { get; set; }
@@ -13,7 +14,10 @@ public sealed class VisitDetailsResponse
     public Guid? AssignedMechanicUserId { get; set; }
     public string? AssignedMechanicDisplayName { get; set; }
     public VisitStatus Status { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+
+    public bool HasDependentRecords { get; set; }
 
     public List<VisitServiceItemResponse> ServiceItems { get; set; } = [];
     public decimal TotalAmount { get; set; }

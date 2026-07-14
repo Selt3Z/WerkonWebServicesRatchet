@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Web.Models;
+namespace WerkonWebServicesRatchet.Web.Models;
 
 public sealed class VehicleDetailsModel
 {
@@ -12,7 +12,12 @@ public sealed class VehicleDetailsModel
     public int? Year { get; set; }
     public string LicensePlate { get; set; } = string.Empty;
     public string? Vin { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 
+    public bool HasDependentRecords { get; set; }
+
     public List<VisitListItem> Visits { get; set; } = [];
+
+    public List<VehicleReminderItemModel> Reminders { get; set; } = [];
 }

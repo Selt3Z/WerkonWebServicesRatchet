@@ -2,25 +2,41 @@
 
 <PageTitle>@L["About_PageTitle"]</PageTitle>
 
-<h1>@L["About_PageTitle"]</h1>
+<div class="about-page">
+    <section class="about-hero">
+        <img class="about-hero-logo" src="images/fulllogo.png" alt="@L["AppName"]" />
+    </section>
 
-<p>@L["About_Description"]</p>
+    <section class="about-card">
+        <h2 class="about-card-title">@L["About_PageTitle"]</h2>
+        <p class="about-lead">@L["About_Description"]</p>
+        <ul class="about-features">
+            <li>@L["About_Feature_Clients"]</li>
+            <li>@L["About_Feature_Visits"]</li>
+            <li>@L["About_Feature_Reminders"]</li>
+            <li>@L["About_Feature_Reports"]</li>
+        </ul>
+    </section>
 
-<ul class="list-unstyled about-contacts">
-    <li>
-        VK:
-        <a href="https://vk.com/selt3z" target="_blank" rel="noopener noreferrer">vk.com/selt3z</a>
-    </li>
-    <li>
-        Telegram:
-        <a href="https://t.me/selt3z" target="_blank" rel="noopener noreferrer">t.me/selt3z</a>
-    </li>
-    <li>
-        Email:
-        <a href="mailto:selt.miteg@gmail.com">selt.miteg@gmail.com</a>
-    </li>
-    <li>
-        @L["Phone"]:
-        <a href="tel:+79997058131">+79997058131</a>
-    </li>
-</ul>
+    <section class="about-contacts-section">
+        <h2 class="about-contacts-title">@L["About_ContactsTitle"]</h2>
+        <div class="about-contacts-grid">
+            <a class="about-contact-card" href="https://vk.com/selt3z" target="_blank" rel="noopener noreferrer">
+                <span class="about-contact-label">VK</span>
+                <span class="about-contact-value">vk.com/selt3z</span>
+            </a>
+            <a class="about-contact-card" href="https://t.me/selt3z" target="_blank" rel="noopener noreferrer">
+                <span class="about-contact-label">Telegram</span>
+                <span class="about-contact-value">t.me/selt3z</span>
+            </a>
+            <a class="about-contact-card" href="mailto:selt.miteg@gmail.com">
+                <span class="about-contact-label">Email</span>
+                <span class="about-contact-value">selt.miteg@gmail.com</span>
+            </a>
+            <a class="about-contact-card" href="tel:+79997058131">
+                <span class="about-contact-label">@L["Phone"]</span>
+                <span class="about-contact-value">+7 999 705 81 31</span>
+            </a>
+        </div>
+    </section>
+</div>

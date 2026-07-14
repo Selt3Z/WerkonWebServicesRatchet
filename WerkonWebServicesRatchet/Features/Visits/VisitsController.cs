@@ -59,7 +59,7 @@ public sealed class VisitsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var response = await ProjectVisitResponses(_dbContext.Visits.Where(x => x.Id == id))
+        var response = await ProjectVisitResponses(_dbContext.Visits.IgnoreQueryFilters().Where(x => x.Id == id))
             .SingleOrDefaultAsync(cancellationToken);
 
         if (response is null)
@@ -114,7 +114,7 @@ public sealed class VisitsController : ControllerBase
             MechanicComment = string.IsNullOrWhiteSpace(request.MechanicComment)
                 ? null
                 : request.MechanicComment.Trim(),
-            Status = VisitStatus.Created,
+            Status = await _appSettingsService.GetDefaultVisitStatusAsync(cancellationToken),
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -233,6 +233,7 @@ public sealed class VisitsController : ControllerBase
     CancellationToken cancellationToken) //Берёт один визит, подтягивает его работы, считает итоговую сумму и отдаёт всё разом.
     {
         var visit = await _dbContext.Visits
+            .IgnoreQueryFilters()
             .Include(x => x.ServiceItems)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
@@ -242,6 +243,41 @@ public sealed class VisitsController : ControllerBase
         }
 
         return Ok(await MapVisitDetailsResponseAsync(visit, cancellationToken));
+    }
+
+    [HttpPatch("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
+        await SetArchivedAsync(id, archived: true, cancellationToken);
+
+    [HttpPatch("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken) =>
+        await SetArchivedAsync(id, archived: false, cancellationToken);
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.HardDeleteRecords)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var visit = await _dbContext.Visits
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (visit is null)
+        {
+            return NotFound();
+        }
+
+        var hasServiceItems = await _dbContext.VisitServiceItems
+            .AnyAsync(x => x.VisitId == id, cancellationToken);
+
+        if (hasServiceItems)
+        {
+            return Conflict(new { message = "Visit has service items and cannot be deleted. Archive it instead." });
+        }
+
+        _dbContext.Visits.Remove(visit);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
     }
 
     [HttpPatch("{id:guid}/status")]
@@ -271,6 +307,7 @@ public sealed class VisitsController : ControllerBase
     public async Task<IActionResult> GetWorkOrder(Guid id, CancellationToken cancellationToken)
     {
         var visit = await _dbContext.Visits
+            .IgnoreQueryFilters()
             .Include(x => x.ServiceItems)
             .Include(x => x.Vehicle)
             .ThenInclude(x => x.Client)
@@ -308,6 +345,7 @@ public sealed class VisitsController : ControllerBase
         {
             Organization = organization,
             VisitId = visit.Id,
+            VisitNumber = visit.Number,
             VisitedAtLocal = _appTimeZone.FromUtc(visit.VisitedAtUtc),
             ClientFullName = visit.Vehicle.Client.FullName,
             ClientPhoneNumber = visit.Vehicle.Client.PhoneNumber,
@@ -323,7 +361,7 @@ public sealed class VisitsController : ControllerBase
             TotalAmount = items.Sum(x => x.TotalPrice)
         });
 
-        var fileName = $"work-order-{visit.Id.ToString()[..8]}.pdf";
+        var fileName = $"work-order-{visit.Number}.pdf";
         return File(pdf, "application/pdf", fileName);
     }
 
@@ -370,6 +408,7 @@ public sealed class VisitsController : ControllerBase
         select new VisitResponse
         {
             Id = visit.Id,
+            Number = visit.Number,
             VehicleId = visit.VehicleId,
             VisitedAtUtc = visit.VisitedAtUtc,
             MileageAtVisit = visit.MileageAtVisit,
@@ -380,6 +419,7 @@ public sealed class VisitsController : ControllerBase
                 ? null
                 : (string.IsNullOrWhiteSpace(mechanic.DisplayName) ? mechanic.UserName : mechanic.DisplayName),
             Status = visit.Status,
+            IsArchived = visit.IsArchived,
             CreatedAtUtc = visit.CreatedAtUtc
         };
 
@@ -392,6 +432,7 @@ public sealed class VisitsController : ControllerBase
         return new VisitResponse
         {
             Id = visit.Id,
+            Number = visit.Number,
             VehicleId = visit.VehicleId,
             VisitedAtUtc = visit.VisitedAtUtc,
             MileageAtVisit = visit.MileageAtVisit,
@@ -400,6 +441,7 @@ public sealed class VisitsController : ControllerBase
             AssignedMechanicUserId = visit.AssignedMechanicUserId,
             AssignedMechanicDisplayName = assignedMechanicDisplayName,
             Status = visit.Status,
+            IsArchived = visit.IsArchived,
             CreatedAtUtc = visit.CreatedAtUtc
         };
     }
@@ -430,6 +472,7 @@ public sealed class VisitsController : ControllerBase
         return new VisitDetailsResponse
         {
             Id = visit.Id,
+            Number = visit.Number,
             VehicleId = visit.VehicleId,
             VisitedAtUtc = visit.VisitedAtUtc,
             MileageAtVisit = visit.MileageAtVisit,
@@ -438,10 +481,36 @@ public sealed class VisitsController : ControllerBase
             AssignedMechanicUserId = visit.AssignedMechanicUserId,
             AssignedMechanicDisplayName = assignedMechanicDisplayName,
             Status = visit.Status,
+            IsArchived = visit.IsArchived,
             CreatedAtUtc = visit.CreatedAtUtc,
+            HasDependentRecords = serviceItems.Count > 0,
             ServiceItems = serviceItems,
             TotalAmount = serviceItems.Sum(x => x.TotalPrice)
         };
+    }
+
+    private async Task<IActionResult> SetArchivedAsync(
+        Guid id,
+        bool archived,
+        CancellationToken cancellationToken)
+    {
+        var visit = await _dbContext.Visits
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (visit is null)
+        {
+            return NotFound();
+        }
+
+        if (visit.IsArchived != archived)
+        {
+            visit.IsArchived = archived;
+            visit.ArchivedAtUtc = archived ? DateTime.UtcNow : null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return NoContent();
     }
 
     private async Task<string?> GetUserDisplayNameAsync(Guid? userId, CancellationToken cancellationToken)

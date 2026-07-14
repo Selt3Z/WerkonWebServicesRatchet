@@ -11,11 +11,11 @@ public sealed class ThemeService
         _jsRuntime = jsRuntime;
     }
 
-    public string Current { get; private set; } = "light";
+    public string Current { get; private set; } = AppThemeNames.Light;
 
     public async Task ApplyAsync(string? theme)
     {
-        Current = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase) ? "dark" : "light";
+        Current = AppThemeNames.Normalize(theme);
         await _jsRuntime.InvokeVoidAsync("ratchetTheme.set", Current);
     }
 }

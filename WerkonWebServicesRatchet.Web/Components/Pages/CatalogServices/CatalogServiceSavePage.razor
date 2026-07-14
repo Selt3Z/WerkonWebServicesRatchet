@@ -1,17 +1,23 @@
 @page "/catalog-services/new"
 @page "/catalog-services/{Id:guid}/edit"
-@using WerkonWebServicesRatchet.Web.Authorization
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using WerkonWebServicesRatchet.Web.Models
-@attribute [RequireManagerOrAdministrator]
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AppPreferencesService AppPreferences
 
 <PageTitle>@(IsEditMode ? L["ServiceCatalog_EditTitle"] : L["ServiceCatalog_New"])</PageTitle>
 
 <h1>@(IsEditMode ? L["ServiceCatalog_EditTitle"] : L["ServiceCatalog_New"])</h1>
 
-@if (IsLoading)
+@if (!CanAccessPage)
+{
+    <p role="alert">@L["AccessDenied"]</p>
+}
+else if (IsLoading)
 {
     <p>@L["Loading"]</p>
 }
@@ -81,7 +87,8 @@ else
     public Guid? Id { get; set; }
 
     private CatalogServiceSaveModel Model { get; set; } = new();
-    private bool IsLoading { get; set; }
+    private bool CanAccessPage { get; set; }
+    private bool IsLoading { get; set; } = true;
     private bool IsSaving { get; set; }
     private string? ErrorMessage { get; set; }
 
@@ -90,17 +97,32 @@ else
     protected override async Task OnParametersSetAsync()
     {
         ErrorMessage = null;
+        IsLoading = true;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var isAdminOrManager = authState.User.IsInRole("Administrator") || authState.User.IsInRole("Manager");
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+
+        CanAccessPage = IsEditMode
+            ? isAdminOrManager
+            : isAdminOrManager
+              || (authState.User.IsInRole("Mechanic") && AppPreferences.MechanicCanAddCatalogServices);
+
+        if (!CanAccessPage)
+        {
+            IsLoading = false;
+            return;
+        }
 
         if (!IsEditMode)
         {
             Model = new CatalogServiceSaveModel();
+            IsLoading = false;
             return;
         }
 
         try
         {
-            IsLoading = true;
-
             var service = await ApiClient.GetCatalogServiceAsync(Id!.Value);
 
             if (service is null)
@@ -132,6 +154,11 @@ else
 
     private async Task SaveAsync()
     {
+        if (!CanAccessPage)
+        {
+            return;
+        }
+
         try
         {
             IsSaving = true;

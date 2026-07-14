@@ -98,12 +98,24 @@ public sealed class RatchetApiClient
         }
     }
 
-    public async Task<List<ClientListItem>> GetClientsAsync(
+    public async Task<PagedResult<ClientListItem>> GetClientsAsync(
         string? name,
         string? phone,
+        bool includeArchived = false,
+        int skip = 0,
+        int take = 30,
         CancellationToken cancellationToken = default)
     {
-        var queryParts = new List<string>();
+        var queryParts = new List<string>
+        {
+            $"skip={skip}",
+            $"take={take}"
+        };
+
+        if (includeArchived)
+        {
+            queryParts.Add("includeArchived=true");
+        }
 
         if (!string.IsNullOrWhiteSpace(name))
         {
@@ -115,15 +127,76 @@ public sealed class RatchetApiClient
             queryParts.Add($"phone={Uri.EscapeDataString(phone)}");
         }
 
-        var url = "api/clients";
+        var url = "api/clients?" + string.Join("&", queryParts);
 
-        if (queryParts.Count > 0)
+        var result = await SafeGetFromJsonAsync<PagedResult<ClientListItem>>(url, cancellationToken);
+        return result ?? new PagedResult<ClientListItem>();
+    }
+
+    public Task<(bool Success, string? ErrorMessage)> ArchiveClientAsync(Guid clientId, CancellationToken cancellationToken = default) =>
+        SendArchiveRequestAsync($"api/clients/{clientId}/archive", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> RestoreClientAsync(Guid clientId, CancellationToken cancellationToken = default) =>
+        SendArchiveRequestAsync($"api/clients/{clientId}/restore", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> DeleteClientAsync(Guid clientId, CancellationToken cancellationToken = default) =>
+        SendDeleteRequestAsync($"api/clients/{clientId}", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> ArchiveVehicleAsync(Guid vehicleId, CancellationToken cancellationToken = default) =>
+        SendArchiveRequestAsync($"api/vehicles/{vehicleId}/archive", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> RestoreVehicleAsync(Guid vehicleId, CancellationToken cancellationToken = default) =>
+        SendArchiveRequestAsync($"api/vehicles/{vehicleId}/restore", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> DeleteVehicleAsync(Guid vehicleId, CancellationToken cancellationToken = default) =>
+        SendDeleteRequestAsync($"api/vehicles/{vehicleId}", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> ArchiveVisitAsync(Guid visitId, CancellationToken cancellationToken = default) =>
+        SendArchiveRequestAsync($"api/visits/{visitId}/archive", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> RestoreVisitAsync(Guid visitId, CancellationToken cancellationToken = default) =>
+        SendArchiveRequestAsync($"api/visits/{visitId}/restore", cancellationToken);
+
+    public Task<(bool Success, string? ErrorMessage)> DeleteVisitAsync(Guid visitId, CancellationToken cancellationToken = default) =>
+        SendDeleteRequestAsync($"api/visits/{visitId}", cancellationToken);
+
+    private async Task<(bool Success, string? ErrorMessage)> SendArchiveRequestAsync(
+        string url,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Patch, url);
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        if (IsUnauthorized(response))
         {
-            url += "?" + string.Join("&", queryParts);
+            return (false, null);
         }
 
-        var result = await SafeGetFromJsonAsync<List<ClientListItem>>(url, cancellationToken);
-        return result ?? [];
+        if (!response.IsSuccessStatusCode)
+        {
+            return (false, await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return (true, null);
+    }
+
+    private async Task<(bool Success, string? ErrorMessage)> SendDeleteRequestAsync(
+        string url,
+        CancellationToken cancellationToken)
+    {
+        var response = await _httpClient.DeleteAsync(url, cancellationToken);
+
+        if (IsUnauthorized(response))
+        {
+            return (false, null);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return (false, await ReadApiErrorMessageAsync(response, cancellationToken));
+        }
+
+        return (true, null);
     }
 
     public async Task<ClientListItem?> GetClientAsync(
@@ -451,11 +524,16 @@ public sealed class RatchetApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<List<UserListItem>> GetUsersAsync(
+    public async Task<PagedResult<UserListItem>> GetUsersAsync(
+        int skip = 0,
+        int take = 30,
         CancellationToken cancellationToken = default)
     {
-        var result = await SafeGetFromJsonAsync<List<UserListItem>>("api/users", cancellationToken);
-        return result ?? [];
+        var result = await SafeGetFromJsonAsync<PagedResult<UserListItem>>(
+            $"api/users?skip={skip}&take={take}",
+            cancellationToken);
+
+        return result ?? new PagedResult<UserListItem>();
     }
 
     public async Task<UserListItem?> GetUserAsync(
@@ -534,6 +612,28 @@ public sealed class RatchetApiClient
         return result ?? [];
     }
 
+    public async Task<List<ReminderByDayItemModel>> GetRemindersByRangeAsync(
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"api/reminders/by-range?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
+        var result = await SafeGetFromJsonAsync<List<ReminderByDayItemModel>>(url, cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<SystemStatusModel?> GetSystemStatusAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await SafeGetFromJsonAsync<SystemStatusModel>("api/system/status", cancellationToken);
+    }
+
+    public async Task<BackupStatusModel?> GetBackupStatusAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await SafeGetFromJsonAsync<BackupStatusModel>("api/settings/backup-status", cancellationToken);
+    }
+
     public async Task<ReminderDetailsModel?> GetReminderAsync(
         Guid reminderId,
         CancellationToken cancellationToken = default)
@@ -553,7 +653,6 @@ public sealed class RatchetApiClient
         var payload = new
         {
             model.VehicleId,
-            model.VisitId,
             ReminderDate = DateOnly.FromDateTime(model.ReminderDateLocal.Value),
             model.Note
         };
@@ -583,6 +682,11 @@ public sealed class RatchetApiClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<ReminderDetailsModel>(cancellationToken);
     }
+
+    public Task<(bool Success, string? ErrorMessage)> DeleteReminderAsync(
+        Guid reminderId,
+        CancellationToken cancellationToken = default) =>
+        SendDeleteRequestAsync($"api/reminders/{reminderId}", cancellationToken);
 
     private static async Task<string> ReadApiErrorMessageAsync(
         HttpResponseMessage response,
@@ -661,12 +765,18 @@ public sealed class RatchetApiClient
         return content;
     }
 
-    public async Task<List<CatalogServiceListItem>> GetCatalogServicesAsync(
+    public async Task<PagedResult<CatalogServiceListItem>> GetCatalogServicesAsync(
         string? search = null,
         bool activeOnly = false,
+        int skip = 0,
+        int take = 30,
         CancellationToken cancellationToken = default)
     {
-        var query = new List<string>();
+        var query = new List<string>
+        {
+            $"skip={skip}",
+            $"take={take}"
+        };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -678,12 +788,10 @@ public sealed class RatchetApiClient
             query.Add("activeOnly=true");
         }
 
-        var url = query.Count == 0
-            ? "api/catalog-services"
-            : $"api/catalog-services?{string.Join("&", query)}";
+        var url = $"api/catalog-services?{string.Join("&", query)}";
 
-        var result = await SafeGetFromJsonAsync<List<CatalogServiceListItem>>(url, cancellationToken);
-        return result ?? [];
+        var result = await SafeGetFromJsonAsync<PagedResult<CatalogServiceListItem>>(url, cancellationToken);
+        return result ?? new PagedResult<CatalogServiceListItem>();
     }
 
     public async Task<CatalogServiceListItem?> GetCatalogServiceAsync(
@@ -756,15 +864,16 @@ public sealed class RatchetApiClient
         return (true, null);
     }
 
-    public async Task<List<AuditLogItemModel>> GetAuditLogAsync(
-        int take = 200,
+    public async Task<PagedResult<AuditLogItemModel>> GetAuditLogAsync(
+        int skip = 0,
+        int take = 50,
         CancellationToken cancellationToken = default)
     {
-        var result = await SafeGetFromJsonAsync<List<AuditLogItemModel>>(
-            $"api/audit-log?take={take}",
+        var result = await SafeGetFromJsonAsync<PagedResult<AuditLogItemModel>>(
+            $"api/audit-log?skip={skip}&take={take}",
             cancellationToken);
 
-        return result ?? [];
+        return result ?? new PagedResult<AuditLogItemModel>();
     }
 
     public async Task<SettingsModel?> GetSettingsAsync(
@@ -857,17 +966,28 @@ public sealed class RatchetApiClient
         string timeZoneId,
         CancellationToken cancellationToken = default)
     {
-        return await UpdateSettingsAsync(timeZoneId, null, cancellationToken);
+        return await UpdateSettingsAsync(new SettingsModel { TimeZoneId = timeZoneId }, cancellationToken);
     }
 
     public async Task<SettingsModel?> UpdateSettingsAsync(
-        string? timeZoneId,
-        string? theme,
+        SettingsModel model,
         CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.PutAsJsonAsync(
             "api/settings",
-            new { TimeZoneId = timeZoneId, Theme = theme },
+            new
+            {
+                model.TimeZoneId,
+                model.Theme,
+                model.CurrencyCode,
+                model.DefaultVisitStatus,
+                model.ReminderLookbackDays,
+                model.HideArchivedByDefault,
+                model.ManagerCanHardDelete,
+                model.MechanicCanAddCatalogServices,
+                model.AuditRetentionDays,
+                model.ListPageSize
+            },
             cancellationToken);
 
         if (IsUnauthorized(response))

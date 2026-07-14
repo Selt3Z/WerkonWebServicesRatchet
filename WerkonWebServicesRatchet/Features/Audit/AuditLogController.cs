@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Audit;
+using WerkonWebServicesRatchet.Contracts.Common;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using WerkonWebServicesRatchet.Infrastructure.Persistence;
 
@@ -9,12 +10,9 @@ namespace WerkonWebServicesRatchet.Features.Audit;
 
 [ApiController]
 [Route("api/audit-log")]
-[Authorize(Policy = AuthorizationPolicies.ManageUsers)]
+[Authorize(Policy = AuthorizationPolicies.ViewAuditLog)]
 public sealed class AuditLogController : ControllerBase
 {
-    private const int DefaultTake = 200;
-    private const int MaxTake = 500;
-
     private readonly AppDbContext _dbContext;
 
     public AuditLogController(AppDbContext dbContext)
@@ -23,17 +21,17 @@ public sealed class AuditLogController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<AuditLogItemResponse>>> Get(
+    public async Task<ActionResult<PagedResponse<AuditLogItemResponse>>> Get(
+        [FromQuery] int? skip,
         [FromQuery] int? take,
         CancellationToken cancellationToken)
     {
-        var pageSize = Math.Clamp(take ?? DefaultTake, 1, MaxTake);
+        var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);
 
         var response = await _dbContext.AuditLogEntries
             .AsNoTracking()
             .OrderByDescending(x => x.OccurredAtUtc)
             .ThenByDescending(x => x.Id)
-            .Take(pageSize)
             .Select(x => new AuditLogItemResponse
             {
                 Id = x.Id,
@@ -44,7 +42,7 @@ public sealed class AuditLogController : ControllerBase
                 Summary = x.Summary,
                 EntityUrl = x.EntityUrl
             })
-            .ToListAsync(cancellationToken);
+            .ToPagedResponseAsync(normalizedSkip, normalizedTake, cancellationToken);
 
         return Ok(response);
     }

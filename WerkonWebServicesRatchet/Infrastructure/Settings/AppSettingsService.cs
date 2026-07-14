@@ -11,6 +11,25 @@ namespace WerkonWebServicesRatchet.Infrastructure.Settings;
 public sealed class AppSettingsService
 {
     private const int MaxLogoBytes = 512 * 1024;
+    private const int MinListPageSize = 10;
+    private const int MaxListPageSize = 100;
+    private const int MinReminderLookbackDays = 1;
+    private const int MaxReminderLookbackDays = 90;
+    private const int MinAuditRetentionDays = 7;
+    private const int MaxAuditRetentionDays = 3650;
+
+    private static readonly HashSet<string> AllowedCurrencyCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "RUB",
+        "USD",
+        "EUR"
+    };
+
+    private static readonly HashSet<string> AllowedVisitStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        nameof(VisitStatus.Created),
+        nameof(VisitStatus.InProgress)
+    };
 
     private static readonly HashSet<string> AllowedLogoContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -43,7 +62,16 @@ public sealed class AppSettingsService
         return new SettingsResponse
         {
             TimeZoneId = await GetTimeZoneIdAsync(cancellationToken),
-            Theme = await GetThemeAsync(cancellationToken)
+            Theme = await GetThemeAsync(cancellationToken),
+            CurrencyCode = await GetCurrencyCodeAsync(cancellationToken),
+            CurrencyDecimalPlaces = AppSettingsDefaults.CurrencyDecimalPlaces,
+            DefaultVisitStatus = await GetDefaultVisitStatusNameAsync(cancellationToken),
+            ReminderLookbackDays = await GetReminderLookbackDaysAsync(cancellationToken),
+            HideArchivedByDefault = await GetHideArchivedByDefaultAsync(cancellationToken),
+            ManagerCanHardDelete = await GetManagerCanHardDeleteAsync(cancellationToken),
+            MechanicCanAddCatalogServices = await GetMechanicCanAddCatalogServicesAsync(cancellationToken),
+            AuditRetentionDays = await GetAuditRetentionDaysAsync(cancellationToken),
+            ListPageSize = await GetListPageSizeAsync(cancellationToken)
         };
     }
 
@@ -61,7 +89,152 @@ public sealed class AppSettingsService
             await SetThemeAsync(request.Theme, cancellationToken);
         }
 
+        if (!string.IsNullOrWhiteSpace(request.CurrencyCode))
+        {
+            await SetCurrencyCodeAsync(request.CurrencyCode, cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.DefaultVisitStatus))
+        {
+            await SetDefaultVisitStatusNameAsync(request.DefaultVisitStatus, cancellationToken);
+        }
+
+        if (request.ReminderLookbackDays.HasValue)
+        {
+            await SetReminderLookbackDaysAsync(request.ReminderLookbackDays.Value, cancellationToken);
+        }
+
+        if (request.HideArchivedByDefault.HasValue)
+        {
+            await SetHideArchivedByDefaultAsync(request.HideArchivedByDefault.Value, cancellationToken);
+        }
+
+        if (request.ManagerCanHardDelete.HasValue)
+        {
+            await SetManagerCanHardDeleteAsync(request.ManagerCanHardDelete.Value, cancellationToken);
+        }
+
+        if (request.MechanicCanAddCatalogServices.HasValue)
+        {
+            await SetMechanicCanAddCatalogServicesAsync(request.MechanicCanAddCatalogServices.Value, cancellationToken);
+        }
+
+        if (request.AuditRetentionDays.HasValue)
+        {
+            await SetAuditRetentionDaysAsync(request.AuditRetentionDays.Value, cancellationToken);
+        }
+
+        if (request.ListPageSize.HasValue)
+        {
+            await SetListPageSizeAsync(request.ListPageSize.Value, cancellationToken);
+        }
+
         return await GetSettingsAsync(cancellationToken);
+    }
+
+    public async Task<string> GetCurrencyCodeAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.CurrencyCode, cancellationToken);
+        return NormalizeCurrencyCode(storedValue);
+    }
+
+    public async Task<int> GetReminderLookbackDaysAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.ReminderLookbackDays, cancellationToken);
+        return ParseBoundedInt(storedValue, AppSettingsDefaults.ReminderLookbackDays, MinReminderLookbackDays, MaxReminderLookbackDays);
+    }
+
+    public async Task<bool> GetHideArchivedByDefaultAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.HideArchivedByDefault, cancellationToken);
+        return ParseBool(storedValue, AppSettingsDefaults.HideArchivedByDefault);
+    }
+
+    public async Task<bool> GetManagerCanHardDeleteAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.ManagerCanHardDelete, cancellationToken);
+        return ParseBool(storedValue, AppSettingsDefaults.ManagerCanHardDelete);
+    }
+
+    public async Task<bool> GetMechanicCanAddCatalogServicesAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.MechanicCanAddCatalogServices, cancellationToken);
+        return ParseBool(storedValue, AppSettingsDefaults.MechanicCanAddCatalogServices);
+    }
+
+    public async Task<int> GetAuditRetentionDaysAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.AuditRetentionDays, cancellationToken);
+        return ParseBoundedInt(storedValue, AppSettingsDefaults.AuditRetentionDays, MinAuditRetentionDays, MaxAuditRetentionDays);
+    }
+
+    public async Task<int> GetListPageSizeAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.ListPageSize, cancellationToken);
+        return ParseBoundedInt(storedValue, AppSettingsDefaults.ListPageSize, MinListPageSize, MaxListPageSize);
+    }
+
+    public async Task<VisitStatus> GetDefaultVisitStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var statusName = await GetDefaultVisitStatusNameAsync(cancellationToken);
+        return Enum.TryParse<VisitStatus>(statusName, ignoreCase: true, out var status)
+            ? status
+            : VisitStatus.Created;
+    }
+
+    public async Task<string> GetDefaultVisitStatusNameAsync(CancellationToken cancellationToken = default)
+    {
+        var storedValue = await GetSettingValueAsync(AppSettingKeys.DefaultVisitStatus, cancellationToken);
+        return NormalizeVisitStatusName(storedValue);
+    }
+
+    public Task<string> SetCurrencyCodeAsync(string currencyCode, CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeCurrencyCode(currencyCode);
+        if (!AllowedCurrencyCodes.Contains(normalized))
+        {
+            throw new ArgumentException("Unsupported currency code.", nameof(currencyCode));
+        }
+
+        return SaveAndReturnAsync(AppSettingKeys.CurrencyCode, normalized, cancellationToken);
+    }
+
+    public Task<string> SetDefaultVisitStatusNameAsync(string statusName, CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeVisitStatusName(statusName);
+        if (!AllowedVisitStatuses.Contains(normalized))
+        {
+            throw new ArgumentException("Unsupported default visit status.", nameof(statusName));
+        }
+
+        return SaveAndReturnAsync(AppSettingKeys.DefaultVisitStatus, normalized, cancellationToken);
+    }
+
+    public Task<int> SetReminderLookbackDaysAsync(int days, CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeBoundedInt(days, MinReminderLookbackDays, MaxReminderLookbackDays, nameof(days));
+        return SaveAndReturnIntAsync(AppSettingKeys.ReminderLookbackDays, normalized, cancellationToken);
+    }
+
+    public Task<bool> SetHideArchivedByDefaultAsync(bool hideArchived, CancellationToken cancellationToken = default) =>
+        SaveAndReturnBoolAsync(AppSettingKeys.HideArchivedByDefault, hideArchived, cancellationToken);
+
+    public Task<bool> SetManagerCanHardDeleteAsync(bool allowed, CancellationToken cancellationToken = default) =>
+        SaveAndReturnBoolAsync(AppSettingKeys.ManagerCanHardDelete, allowed, cancellationToken);
+
+    public Task<bool> SetMechanicCanAddCatalogServicesAsync(bool allowed, CancellationToken cancellationToken = default) =>
+        SaveAndReturnBoolAsync(AppSettingKeys.MechanicCanAddCatalogServices, allowed, cancellationToken);
+
+    public Task<int> SetAuditRetentionDaysAsync(int days, CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeBoundedInt(days, MinAuditRetentionDays, MaxAuditRetentionDays, nameof(days));
+        return SaveAndReturnIntAsync(AppSettingKeys.AuditRetentionDays, normalized, cancellationToken);
+    }
+
+    public Task<int> SetListPageSizeAsync(int pageSize, CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeBoundedInt(pageSize, MinListPageSize, MaxListPageSize, nameof(pageSize));
+        return SaveAndReturnIntAsync(AppSettingKeys.ListPageSize, normalized, cancellationToken);
     }
 
     public async Task<string> GetTimeZoneIdAsync(CancellationToken cancellationToken = default)
@@ -176,6 +349,18 @@ public sealed class AppSettingsService
             throw new ArgumentException($"Logo size must be between 1 byte and {MaxLogoBytes} bytes.");
         }
 
+        var detectedContentType = DetectImageContentType(logoBytes);
+
+        if (detectedContentType is null)
+        {
+            throw new ArgumentException("Logo data is not a valid PNG, JPEG, or WebP image.");
+        }
+
+        if (!string.Equals(detectedContentType, request.ContentType.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Logo content type does not match the actual image format.");
+        }
+
         var logo = new OrganizationLogoData
         {
             ContentType = request.ContentType.Trim(),
@@ -240,6 +425,37 @@ public sealed class AppSettingsService
             Bik = profile.Bik,
             LogoBytes = logoBytes
         };
+    }
+
+    /// <summary>
+    /// Detects the image format from magic bytes. Returns null when the data
+    /// is not one of the supported formats (PNG, JPEG, WebP).
+    /// </summary>
+    private static string? DetectImageContentType(byte[] data)
+    {
+        // PNG: 89 50 4E 47 0D 0A 1A 0A
+        if (data.Length >= 8
+            && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
+            && data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A)
+        {
+            return "image/png";
+        }
+
+        // JPEG: FF D8 FF
+        if (data.Length >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF)
+        {
+            return "image/jpeg";
+        }
+
+        // WebP: "RIFF" .... "WEBP"
+        if (data.Length >= 12
+            && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46
+            && data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50)
+        {
+            return "image/webp";
+        }
+
+        return null;
     }
 
     private async Task<OrganizationProfile> LoadOrganizationProfileAsync(CancellationToken cancellationToken)
@@ -327,6 +543,56 @@ public sealed class AppSettingsService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private static string NormalizeTheme(string? theme) =>
-        string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase) ? "dark" : "light";
+    private static string NormalizeTheme(string? theme) => AppThemeNames.Normalize(theme);
+
+    private static string NormalizeCurrencyCode(string? currencyCode) =>
+        string.IsNullOrWhiteSpace(currencyCode)
+            ? AppSettingsDefaults.CurrencyCode
+            : currencyCode.Trim().ToUpperInvariant();
+
+    private static string NormalizeVisitStatusName(string? statusName) =>
+        string.IsNullOrWhiteSpace(statusName)
+            ? AppSettingsDefaults.DefaultVisitStatus
+            : statusName.Trim();
+
+    private static bool ParseBool(string? value, bool defaultValue) =>
+        bool.TryParse(value, out var parsed) ? parsed : defaultValue;
+
+    private static int ParseBoundedInt(string? value, int defaultValue, int min, int max)
+    {
+        if (!int.TryParse(value, out var parsed))
+        {
+            return defaultValue;
+        }
+
+        return Math.Clamp(parsed, min, max);
+    }
+
+    private static int NormalizeBoundedInt(int value, int min, int max, string paramName)
+    {
+        if (value < min || value > max)
+        {
+            throw new ArgumentOutOfRangeException(paramName, $"Value must be between {min} and {max}.");
+        }
+
+        return value;
+    }
+
+    private async Task<string> SaveAndReturnAsync(string key, string value, CancellationToken cancellationToken)
+    {
+        await SaveSettingAsync(key, value, cancellationToken);
+        return value;
+    }
+
+    private async Task<int> SaveAndReturnIntAsync(string key, int value, CancellationToken cancellationToken)
+    {
+        await SaveSettingAsync(key, value.ToString(), cancellationToken);
+        return value;
+    }
+
+    private async Task<bool> SaveAndReturnBoolAsync(string key, bool value, CancellationToken cancellationToken)
+    {
+        await SaveSettingAsync(key, value.ToString(), cancellationToken);
+        return value;
+    }
 }

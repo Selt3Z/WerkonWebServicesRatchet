@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Auth;
+using WerkonWebServicesRatchet.Contracts.Common;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
+using WerkonWebServicesRatchet.Infrastructure.Persistence;
 
 namespace WerkonWebServicesRatchet.Features.Auth;
 
@@ -24,20 +26,39 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<UserListItemResponse>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<UserListItemResponse>>> GetAll(
+        [FromQuery] int? skip,
+        [FromQuery] int? take,
+        CancellationToken cancellationToken)
     {
+        var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);
+
         var users = await _userManager.Users
             .OrderBy(x => x.UserName)
+            .ThenBy(x => x.Id)
+            .Skip(normalizedSkip)
+            .Take(normalizedTake + 1)
             .ToListAsync(cancellationToken);
 
-        var response = new List<UserListItemResponse>();
+        var hasMore = users.Count > normalizedTake;
+
+        if (hasMore)
+        {
+            users.RemoveAt(users.Count - 1);
+        }
+
+        var items = new List<UserListItemResponse>();
 
         foreach (var user in users)
         {
-            response.Add(await MapListItemAsync(user));
+            items.Add(await MapListItemAsync(user));
         }
 
-        return Ok(response);
+        return Ok(new PagedResponse<UserListItemResponse>
+        {
+            Items = items,
+            HasMore = hasMore
+        });
     }
 
     [HttpGet("{id:guid}")]

@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Domain.Entities;
+namespace WerkonWebServicesRatchet.Domain.Entities;
 
 public sealed class Client
 {
@@ -6,6 +6,8 @@ public sealed class Client
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public List<Vehicle> Vehicles { get; set; } = [];
 }

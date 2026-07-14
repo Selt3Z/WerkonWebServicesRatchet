@@ -1,24 +1,33 @@
 @page "/clients"
 @using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
 @inject RatchetApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AppPreferencesService AppPreferences
 
 <PageTitle>@L["Clients_Title"]</PageTitle>
 
 <h1>@L["Clients_Title"]</h1>
 
-<div class="row g-3 mb-3 clients-filters">
-    <div class="col-md-4">
-        <label class="form-label">@L["Name"]</label>
-        <input class="form-control" @bind="NameFilter" />
+<div class="list-filters clients-filters mb-3">
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="client-name-filter">@L["Name"]</label>
+        <input id="client-name-filter" class="form-control" @bind="NameFilter" />
     </div>
-    <div class="col-md-4">
-        <label class="form-label">@L["Phone"]</label>
-        <input class="form-control" @bind="PhoneFilter" />
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="client-phone-filter">@L["Phone"]</label>
+        <input id="client-phone-filter" class="form-control" @bind="PhoneFilter" />
+    </div>
+    <div class="filter-field filter-field-check">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="includeArchived"
+                   @bind="IncludeArchived" @bind:after="LoadClientsAsync" />
+            <label class="form-check-label" for="includeArchived">@L["Archive_ShowArchived"]</label>
+        </div>
     </div>
 </div>
 
-<div class="mb-3">
+<div class="action-bar mb-3">
     <button class="btn btn-primary" @onclick="LoadClientsAsync">@L["Search"]</button>
     <button class="btn btn-secondary me-2" @onclick="ClearFilters">@L["Clear"]</button>
     <button class="btn btn-success" @onclick="OpenNewClient">@L["Clients_Add"]</button>
@@ -44,37 +53,44 @@ else
                 <th>@L["Name"]</th>
                 <th>@L["Phone"]</th>
                 <th>@L["Notes"]</th>
-                <th></th>
             </tr>
         </thead>
         <tbody>
             @foreach (var client in Clients)
             {
-                <tr>
-                    <td>@client.FullName</td>
+                <tr class="table-row-action" @onclick="() => OpenClient(client.Id)">
+                    <td>
+                        @client.FullName
+                        @if (client.IsArchived)
+                        {
+                            <span class="badge bg-secondary ms-1">@L["Archive_Badge"]</span>
+                        }
+                    </td>
                     <td>@client.PhoneNumber</td>
                     <td>@client.Notes</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary"
-                                @onclick="() => OpenClient(client.Id)">
-                            @L["Open"]
-                        </button>
-                    </td>
                 </tr>
             }
         </tbody>
     </table>
+
+    <InfiniteScroll HasMore="HasMore" IsLoading="IsLoadingMore" OnLoadMore="LoadMoreAsync" />
 }
 
 @code {
     private List<ClientListItem> Clients { get; set; } = [];
     private string? NameFilter { get; set; }
     private string? PhoneFilter { get; set; }
+    private bool IncludeArchived { get; set; }
+    private int PageSize => AppPreferences.ListPageSize;
     private bool IsLoading { get; set; }
+    private bool IsLoadingMore { get; set; }
+    private bool HasMore { get; set; }
     private string? ErrorMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+        IncludeArchived = !AppPreferences.HideArchivedByDefault;
         await LoadClientsAsync();
     }
 
@@ -85,7 +101,9 @@ else
             IsLoading = true;
             ErrorMessage = null;
 
-            Clients = await ApiClient.GetClientsAsync(NameFilter, PhoneFilter);
+            var page = await ApiClient.GetClientsAsync(NameFilter, PhoneFilter, IncludeArchived, skip: 0, take: PageSize);
+            Clients = page.Items;
+            HasMore = page.HasMore;
         }
         catch (Exception ex)
         {
@@ -94,6 +112,31 @@ else
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || !HasMore)
+        {
+            return;
+        }
+
+        try
+        {
+            IsLoadingMore = true;
+
+            var page = await ApiClient.GetClientsAsync(NameFilter, PhoneFilter, IncludeArchived, skip: Clients.Count, take: PageSize);
+            Clients.AddRange(page.Items);
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingMore = false;
         }
     }
 

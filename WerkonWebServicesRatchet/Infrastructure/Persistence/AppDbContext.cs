@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 
@@ -31,18 +32,30 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRo
         {
             entity.HasIndex(x => x.PhoneNumber);
             entity.HasIndex(x => x.FullName);
+            entity.HasIndex(x => x.IsArchived);
+            entity.HasQueryFilter(x => !x.IsArchived);
         });
 
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity.HasIndex(x => x.LicensePlate);
             entity.HasIndex(x => x.Vin);
+            entity.HasIndex(x => x.IsArchived);
+            entity.HasQueryFilter(x => !x.IsArchived);
         });
 
         modelBuilder.Entity<Visit>(entity =>
         {
+            entity.Property(x => x.Number)
+                .ValueGeneratedOnAdd()
+                .UseIdentityByDefaultColumn();
+            entity.Property(x => x.Number).Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
+
+            entity.HasIndex(x => x.Number).IsUnique();
             entity.HasIndex(x => x.VisitedAtUtc);
             entity.HasIndex(x => x.AssignedMechanicUserId);
+            entity.HasIndex(x => x.IsArchived);
+            entity.HasQueryFilter(x => !x.IsArchived);
 
             entity.HasOne<ApplicationUser>()
                 .WithMany()
@@ -58,11 +71,6 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRo
                 .WithMany(x => x.Reminders)
                 .HasForeignKey(x => x.VehicleId)
                 .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(x => x.Visit)
-                .WithMany()
-                .HasForeignKey(x => x.VisitId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
         modelBuilder.Entity<AppSetting>(entity =>
         {

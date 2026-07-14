@@ -98,6 +98,7 @@ public sealed class VehiclesController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _dbContext.Vehicles
+            .IgnoreQueryFilters()
             .Where(x => x.Id == id)
             .Select(x => new VehicleResponse
             {
@@ -108,6 +109,7 @@ public sealed class VehiclesController : ControllerBase
                 Year = x.Year,
                 LicensePlate = x.LicensePlate,
                 Vin = x.Vin,
+                IsArchived = x.IsArchived,
                 CreatedAtUtc = x.CreatedAtUtc
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -249,14 +251,21 @@ public sealed class VehiclesController : ControllerBase
     CancellationToken cancellationToken)
     {
         var vehicle = await _dbContext.Vehicles
+            .IgnoreQueryFilters()
             .Include(x => x.Client)
-            .Include(x => x.Visits)
+            .Include(x => x.Visits.Where(v => !v.IsArchived))
+            .Include(x => x.Reminders)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (vehicle is null)
         {
             return NotFound();
         }
+
+        var hasDependentRecords = await _dbContext.Visits
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.VehicleId == id, cancellationToken)
+            || vehicle.Reminders.Count > 0;
 
         var response = new VehicleDetailsResponse
         {
@@ -269,24 +278,102 @@ public sealed class VehiclesController : ControllerBase
             Year = vehicle.Year,
             LicensePlate = vehicle.LicensePlate,
             Vin = vehicle.Vin,
+            IsArchived = vehicle.IsArchived,
             CreatedAtUtc = vehicle.CreatedAtUtc,
+            HasDependentRecords = hasDependentRecords,
             Visits = vehicle.Visits
                 .OrderByDescending(x => x.VisitedAtUtc)
                 .ThenByDescending(x => x.CreatedAtUtc)
                 .Select(x => new VisitResponse
                 {
                     Id = x.Id,
+                    Number = x.Number,
                     VehicleId = x.VehicleId,
                     VisitedAtUtc = x.VisitedAtUtc,
                     MileageAtVisit = x.MileageAtVisit,
                     CustomerComplaint = x.CustomerComplaint,
                     MechanicComment = x.MechanicComment,
                     Status = x.Status,
+                    IsArchived = x.IsArchived,
                     CreatedAtUtc = x.CreatedAtUtc
+                })
+                .ToList(),
+            Reminders = vehicle.Reminders
+                .OrderByDescending(x => x.ReminderAtUtc)
+                .ThenByDescending(x => x.CreatedAtUtc)
+                .Select(x => new VehicleReminderItemResponse
+                {
+                    Id = x.Id,
+                    ReminderAtUtc = x.ReminderAtUtc,
+                    Note = x.Note,
+                    IsClosed = x.IsClosed
                 })
                 .ToList()
         };
 
         return Ok(response);
+    }
+
+    [HttpPatch("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
+        await SetArchivedAsync(id, archived: true, cancellationToken);
+
+    [HttpPatch("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken) =>
+        await SetArchivedAsync(id, archived: false, cancellationToken);
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.HardDeleteRecords)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var vehicle = await _dbContext.Vehicles
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (vehicle is null)
+        {
+            return NotFound();
+        }
+
+        var hasVisits = await _dbContext.Visits
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.VehicleId == id, cancellationToken);
+
+        var hasReminders = await _dbContext.Reminders
+            .AnyAsync(x => x.VehicleId == id, cancellationToken);
+
+        if (hasVisits || hasReminders)
+        {
+            return Conflict(new { message = "Vehicle has visits or reminders and cannot be deleted. Archive it instead." });
+        }
+
+        _dbContext.Vehicles.Remove(vehicle);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
+    }
+
+    private async Task<IActionResult> SetArchivedAsync(
+        Guid id,
+        bool archived,
+        CancellationToken cancellationToken)
+    {
+        var vehicle = await _dbContext.Vehicles
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (vehicle is null)
+        {
+            return NotFound();
+        }
+
+        if (vehicle.IsArchived != archived)
+        {
+            vehicle.IsArchived = archived;
+            vehicle.ArchivedAtUtc = archived ? DateTime.UtcNow : null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return NoContent();
     }
 }

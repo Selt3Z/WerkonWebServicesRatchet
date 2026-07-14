@@ -1,4 +1,4 @@
-﻿namespace WerkonWebServicesRatchet.Contracts.Vehicles;
+namespace WerkonWebServicesRatchet.Contracts.Vehicles;
 
 public sealed class VehicleResponse
 {
@@ -9,5 +9,6 @@ public sealed class VehicleResponse
     public int? Year { get; set; }
     public string LicensePlate { get; set; } = string.Empty;
     public string? Vin { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

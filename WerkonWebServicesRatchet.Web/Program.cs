@@ -31,6 +31,8 @@ builder.Services.AddScoped<ApiSessionCoordinator>();
 builder.Services.AddScoped<CircuitHandler, AuthCircuitHandler>();
 builder.Services.AddSingleton<AppTimeZone>();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<AppPreferencesService>();
+builder.Services.AddScoped<MoneyFormatService>();
 builder.Services.AddScoped<LocalizationService>();
 builder.Services.AddScoped<ApiAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<ApiAuthenticationStateProvider>());
@@ -95,7 +97,13 @@ app.MapGet("/culture/set/{culture}", (string culture, string? returnUrl, HttpCon
 });
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+if (!builder.Configuration.GetValue<bool>("DisableHttpsRedirection"))
+{
+    app.UseHttpsRedirection();
+}
+
+app.MapGet("/health", () => Results.Ok());
 
 app.UseAntiforgery();
 
