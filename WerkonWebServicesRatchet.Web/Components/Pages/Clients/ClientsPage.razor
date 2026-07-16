@@ -140,10 +140,11 @@ else
         }
     }
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         NameFilter = null;
         PhoneFilter = null;
+        await LoadClientsAsync();
     }
 
     private void OpenClient(Guid clientId)

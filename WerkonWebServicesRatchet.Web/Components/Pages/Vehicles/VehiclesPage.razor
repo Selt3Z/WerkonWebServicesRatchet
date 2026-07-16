@@ -160,11 +160,12 @@ else
         }
     }
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         VinFilter = null;
         LicensePlateFilter = null;
         ClientNameFilter = null;
+        await LoadVehiclesAsync();
     }
 
     private void OpenVehicle(Guid vehicleId)

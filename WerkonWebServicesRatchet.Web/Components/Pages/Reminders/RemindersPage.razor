@@ -148,11 +148,12 @@ else
         }
     }
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         StatusFilter = "open";
         ScopeFilter = "overdue";
         QueryFilter = null;
+        await LoadAsync();
     }
 
     private bool IsOverdue(ReminderByDayItemModel reminder)
