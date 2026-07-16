@@ -38,13 +38,17 @@ public sealed class ClientsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(name))
         {
             var normalizedName = name.Trim().ToLower();
-            query = query.Where(x => x.FullName.ToLower().Contains(normalizedName));
+            query = query.Where(x =>
+                x.FullName.ToLower().Contains(normalizedName)
+                || (x.Notes != null && x.Notes.ToLower().Contains(normalizedName)));
         }
 
         if (!string.IsNullOrWhiteSpace(phone))
         {
             var normalizedPhone = phone.Trim().ToLower();
-            query = query.Where(x => x.PhoneNumber.ToLower().Contains(normalizedPhone));
+            query = query.Where(x =>
+                x.PhoneNumber.ToLower().Contains(normalizedPhone)
+                || (x.Notes != null && x.Notes.ToLower().Contains(normalizedPhone)));
         }
 
         var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);

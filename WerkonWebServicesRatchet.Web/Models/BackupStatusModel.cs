@@ -13,4 +13,6 @@ public sealed class BackupStatusModel
     public long? LastBackupSizeBytes { get; set; }
 
     public bool ResticEnabled { get; set; }
+
+    public bool BackupOkToday { get; set; }
 }

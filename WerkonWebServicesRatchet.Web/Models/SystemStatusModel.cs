@@ -14,5 +14,15 @@ public sealed class SystemStatusModel
 
     public int AuditLogEntryCount { get; set; }
 
+    public string MachineName { get; set; } = string.Empty;
+
+    public string PublicHostname { get; set; } = string.Empty;
+
+    public List<string> AdvertiseAddresses { get; set; } = [];
+
+    public List<string> InterfaceAddresses { get; set; } = [];
+
     public BackupStatusModel Backup { get; set; } = new();
+
+    public List<BackupFileInfoModel> AvailableBackups { get; set; } = [];
 }

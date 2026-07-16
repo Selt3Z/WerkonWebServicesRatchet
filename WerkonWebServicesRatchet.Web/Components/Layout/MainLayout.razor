@@ -28,6 +28,8 @@
                         var role = authContext.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
                     }
 
+                    <GlobalSearchBox />
+
                     <div class="app-user-tray">
                         @if (!string.IsNullOrWhiteSpace(displayName))
                         {

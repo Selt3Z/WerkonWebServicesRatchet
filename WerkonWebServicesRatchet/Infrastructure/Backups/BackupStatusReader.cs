@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WerkonWebServicesRatchet.Contracts.Settings;
+using WerkonWebServicesRatchet.Infrastructure.Time;
 
 namespace WerkonWebServicesRatchet.Infrastructure.Backups;
 
@@ -11,10 +12,12 @@ public sealed class BackupStatusReader
     };
 
     private readonly string? _statusFilePath;
+    private readonly AppTimeZone _appTimeZone;
 
-    public BackupStatusReader(IConfiguration configuration)
+    public BackupStatusReader(IConfiguration configuration, AppTimeZone appTimeZone)
     {
         _statusFilePath = configuration["Backup:StatusFilePath"];
+        _appTimeZone = appTimeZone;
     }
 
     public async Task<BackupStatusResponse> ReadAsync(CancellationToken cancellationToken = default)
@@ -43,6 +46,15 @@ public sealed class BackupStatusReader
                 };
             }
 
+            var okToday = false;
+            if (string.Equals(payload.LastStatus, "success", StringComparison.OrdinalIgnoreCase)
+                && DateTime.TryParse(payload.LastRunUtc, out var lastRun))
+            {
+                var lastLocal = _appTimeZone.FromUtc(DateTime.SpecifyKind(lastRun, DateTimeKind.Utc));
+                var today = _appTimeZone.GetToday();
+                okToday = DateOnly.FromDateTime(lastLocal) == today;
+            }
+
             return new BackupStatusResponse
             {
                 IsConfigured = true,
@@ -50,7 +62,8 @@ public sealed class BackupStatusReader
                 LastStatus = payload.LastStatus,
                 LastMessage = payload.LastMessage,
                 LastBackupSizeBytes = payload.LastBackupSizeBytes,
-                ResticEnabled = payload.ResticEnabled
+                ResticEnabled = payload.ResticEnabled,
+                BackupOkToday = okToday
             };
         }
         catch (Exception ex)

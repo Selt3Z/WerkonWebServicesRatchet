@@ -23,6 +23,10 @@ else if (Status is null)
 }
 else
 {
+    <div class="backup-ok-banner @(Status.Backup.BackupOkToday ? "is-ok" : "is-bad")">
+        @(Status.Backup.BackupOkToday ? L["SystemStatus_BackupOkToday"] : L["SystemStatus_BackupNotOkToday"])
+    </div>
+
     <section class="entity-panel">
         <dl class="entity-meta">
             <div class="entity-meta-item">
@@ -50,6 +54,29 @@ else
                 <dd>@Status.AuditLogEntryCount</dd>
             </div>
         </dl>
+    </section>
+
+    <section class="entity-panel mt-4">
+        <h2 class="section-title">@L["SystemStatus_Network_Title"]</h2>
+        <dl class="entity-meta">
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_Hostname"]</dt>
+                <dd>@Status.PublicHostname</dd>
+            </div>
+            <div class="entity-meta-item">
+                <dt>@L["SystemStatus_MachineName"]</dt>
+                <dd>@Status.MachineName</dd>
+            </div>
+            <div class="entity-meta-item entity-meta-wide">
+                <dt>@L["SystemStatus_LanAddresses"]</dt>
+                <dd>@FormatList(Status.AdvertiseAddresses)</dd>
+            </div>
+            <div class="entity-meta-item entity-meta-wide">
+                <dt>@L["SystemStatus_InterfaceAddresses"]</dt>
+                <dd>@FormatList(Status.InterfaceAddresses)</dd>
+            </div>
+        </dl>
+        <p class="system-status-note">@L["SystemStatus_Network_Help"]</p>
     </section>
 
     <section class="entity-panel mt-4">
@@ -83,6 +110,46 @@ else
                 </div>
             </dl>
         }
+
+        <h3 class="section-title mt-3">@L["SystemStatus_Restore_Title"]</h3>
+        <p class="system-status-note">@L["SystemStatus_Restore_Help"]</p>
+
+        @if (Status.AvailableBackups.Count == 0)
+        {
+            <p class="system-status-note">@L["SystemStatus_Restore_NoFiles"]</p>
+        }
+        else
+        {
+            <div class="list-filters mb-2">
+                <div class="filter-field filter-field-inline" style="min-width: 280px; flex: 1;">
+                    <label class="form-label" for="backup-file">@L["SystemStatus_Restore_File"]</label>
+                    <select id="backup-file" class="form-select" @bind="SelectedBackupPath">
+                        @foreach (var file in Status.AvailableBackups)
+                        {
+                            <option value="@file.RelativePath">
+                                @file.Folder / @file.FileName (@FormatBackupSize(file.SizeBytes))
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-field filter-field-inline">
+                    <label class="form-label" for="backup-confirm">@L["SystemStatus_Restore_ConfirmLabel"]</label>
+                    <input id="backup-confirm" class="form-control" @bind="RestoreConfirmation" placeholder="RESTORE" />
+                </div>
+            </div>
+            <div class="action-bar mb-2">
+                <button class="btn btn-danger"
+                        disabled="@IsRestoring"
+                        @onclick="RestoreAsync">
+                    @(IsRestoring ? L["SystemStatus_Restore_Working"] : L["SystemStatus_Restore_Button"])
+                </button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(RestoreMessage))
+            {
+                <div class="alert @(RestoreSucceeded ? "alert-success" : "alert-danger")">@RestoreMessage</div>
+            }
+        }
+
         <p class="system-status-note">@L["Settings_Backup_Help"]</p>
         <p class="system-status-note">@L["Settings_Restic_Help"]</p>
     </section>
@@ -92,6 +159,11 @@ else
     private SystemStatusModel? Status { get; set; }
     private bool IsLoading { get; set; } = true;
     private string? ErrorMessage { get; set; }
+    private string SelectedBackupPath { get; set; } = string.Empty;
+    private string RestoreConfirmation { get; set; } = string.Empty;
+    private bool IsRestoring { get; set; }
+    private string? RestoreMessage { get; set; }
+    private bool RestoreSucceeded { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -103,6 +175,10 @@ else
             {
                 ErrorMessage = L["SystemStatus_LoadFailed"];
             }
+            else if (Status.AvailableBackups.Count > 0)
+            {
+                SelectedBackupPath = Status.AvailableBackups[0].RelativePath;
+            }
         }
         catch (Exception ex)
         {
@@ -113,6 +189,40 @@ else
             IsLoading = false;
         }
     }
+
+    private async Task RestoreAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedBackupPath))
+        {
+            return;
+        }
+
+        try
+        {
+            IsRestoring = true;
+            RestoreMessage = null;
+            var (success, error) = await ApiClient.RestoreBackupAsync(SelectedBackupPath, RestoreConfirmation);
+            RestoreSucceeded = success;
+            RestoreMessage = success ? L["SystemStatus_Restore_Success"] : (error ?? L["SystemStatus_Restore_Failed"]);
+
+            if (success)
+            {
+                Status = await ApiClient.GetSystemStatusAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            RestoreSucceeded = false;
+            RestoreMessage = ex.Message;
+        }
+        finally
+        {
+            IsRestoring = false;
+        }
+    }
+
+    private static string FormatList(IReadOnlyList<string> values) =>
+        values.Count == 0 ? "—" : string.Join(", ", values);
 
     private string FormatUtc(string value)
     {

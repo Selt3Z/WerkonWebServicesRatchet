@@ -11,9 +11,23 @@ RUN dotnet publish "WerkonWebServicesRatchet.csproj" -c Release -o /app/publish 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    ok=0; \
+    for i in 1 2 3 4 5; do \
+      if apt-get update \
+        && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            curl postgresql-client gzip bash; then \
+        ok=1; \
+        break; \
+      fi; \
+      echo "apt attempt $i failed, retrying..."; \
+      sleep 10; \
+    done; \
+    test "$ok" -eq 1; \
+    command -v curl; \
+    command -v psql; \
+    command -v gunzip; \
+    rm -rf /var/lib/apt/lists/*
 
 ENV ASPNETCORE_URLS=http://+:8080
 

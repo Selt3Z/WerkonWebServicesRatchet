@@ -93,6 +93,9 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<IAuthorizationHandler, HardDeleteAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, CreateCatalogServiceAuthorizationHandler>();
 builder.Services.AddScoped<BackupStatusReader>();
+builder.Services.AddSingleton<BackupCatalogService>();
+builder.Services.AddSingleton<NetworkInfoReader>();
+builder.Services.AddScoped<DatabaseRestoreService>();
 builder.Services.AddHostedService<AuditRetentionHostedService>();
 
 builder.Services.AddSingleton<AppTimeZone>();

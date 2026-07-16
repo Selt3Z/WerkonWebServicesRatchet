@@ -133,6 +133,46 @@ public sealed class RatchetApiClient
         return result ?? new PagedResult<ClientListItem>();
     }
 
+    public async Task<PagedResult<VehicleListItem>> GetVehiclesAsync(
+        string? vin = null,
+        string? licensePlate = null,
+        string? clientName = null,
+        bool includeArchived = false,
+        int skip = 0,
+        int take = 30,
+        CancellationToken cancellationToken = default)
+    {
+        var queryParts = new List<string>
+        {
+            $"skip={skip}",
+            $"take={take}"
+        };
+
+        if (includeArchived)
+        {
+            queryParts.Add("includeArchived=true");
+        }
+
+        if (!string.IsNullOrWhiteSpace(vin))
+        {
+            queryParts.Add($"vin={Uri.EscapeDataString(vin)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(licensePlate))
+        {
+            queryParts.Add($"licensePlate={Uri.EscapeDataString(licensePlate)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(clientName))
+        {
+            queryParts.Add($"clientName={Uri.EscapeDataString(clientName)}");
+        }
+
+        var url = "api/vehicles?" + string.Join("&", queryParts);
+        var result = await SafeGetFromJsonAsync<PagedResult<VehicleListItem>>(url, cancellationToken);
+        return result ?? new PagedResult<VehicleListItem>();
+    }
+
     public Task<(bool Success, string? ErrorMessage)> ArchiveClientAsync(Guid clientId, CancellationToken cancellationToken = default) =>
         SendArchiveRequestAsync($"api/clients/{clientId}/archive", cancellationToken);
 
@@ -601,6 +641,69 @@ public sealed class RatchetApiClient
         }
 
         return (true, null);
+    }
+
+    public async Task<GlobalSearchResult> GlobalSearchAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+        {
+            return new GlobalSearchResult();
+        }
+
+        var url = $"api/search?q={Uri.EscapeDataString(query.Trim())}";
+        return await SafeGetFromJsonAsync<GlobalSearchResult>(url, cancellationToken) ?? new GlobalSearchResult();
+    }
+
+    public async Task<PagedResult<ReminderByDayItemModel>> GetRemindersAsync(
+        string status = "open",
+        string scope = "all",
+        string? q = null,
+        int skip = 0,
+        int take = 30,
+        CancellationToken cancellationToken = default)
+    {
+        var parts = new List<string>
+        {
+            $"status={Uri.EscapeDataString(status)}",
+            $"scope={Uri.EscapeDataString(scope)}",
+            $"skip={skip}",
+            $"take={take}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            parts.Add($"q={Uri.EscapeDataString(q)}");
+        }
+
+        var url = "api/reminders?" + string.Join("&", parts);
+        return await SafeGetFromJsonAsync<PagedResult<ReminderByDayItemModel>>(url, cancellationToken)
+            ?? new PagedResult<ReminderByDayItemModel>();
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> RestoreBackupAsync(
+        string relativePath,
+        string confirmation,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            "api/system/restore-backup",
+            new { relativePath, confirmation },
+            cancellationToken);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return (true, null);
+        }
+
+        if (IsUnauthorized(response))
+        {
+            return (false, null);
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return (false, string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase : body);
     }
 
     public async Task<List<ReminderByDayItemModel>> GetRemindersByDayAsync(

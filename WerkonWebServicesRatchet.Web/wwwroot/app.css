@@ -972,6 +972,121 @@ h1:focus, h2:focus, h3:focus {
     text-overflow: ellipsis;
 }
 
+.global-search {
+    position: relative;
+    flex: 1 1 auto;
+    max-width: 420px;
+    min-width: 140px;
+    margin: 0 auto;
+}
+
+.global-search-input {
+    width: 100%;
+    height: 1.7rem;
+    padding: 0.2rem 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.14);
+    color: var(--r-titlebar-text);
+    font-size: 0.78rem;
+    outline: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.global-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.global-search-input:focus {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.global-search-panel {
+    position: absolute;
+    top: calc(100% + 0.3rem);
+    left: 0;
+    right: 0;
+    max-height: 360px;
+    overflow-y: auto;
+    background: var(--r-surface);
+    color: var(--r-text);
+    border: 1px solid var(--r-border);
+    border-radius: 6px;
+    box-shadow: var(--r-shadow-lg);
+    z-index: 80;
+}
+
+.global-search-group {
+    padding: 0.45rem 0.7rem 0.2rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--r-text-muted);
+}
+
+.global-search-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+}
+
+.global-search-item:hover {
+    background: var(--r-surface-hover);
+}
+
+.global-search-item-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.global-search-item-sub {
+    font-size: 0.74rem;
+    color: var(--r-text-muted);
+}
+
+.global-search-empty {
+    padding: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--r-text-muted);
+}
+
+.reminder-row-overdue > td:first-child {
+    box-shadow: inset 3px 0 0 #c53030;
+}
+
+.backup-ok-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.85rem 1rem;
+    border-radius: 6px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.backup-ok-banner.is-ok {
+    background: #e8f6ee;
+    color: #146c43;
+    border: 1px solid #a3d9b5;
+}
+
+.backup-ok-banner.is-bad {
+    background: #fff4f4;
+    color: #9b1c1c;
+    border: 1px solid #f0b4b4;
+}
+
 .app-user-tray {
     display: flex;
     align-items: center;

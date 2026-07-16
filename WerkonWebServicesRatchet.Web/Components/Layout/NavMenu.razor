@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using WerkonWebServicesRatchet.Web.Localization
 @inject IJSRuntime JS
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
@@ -30,6 +30,20 @@
                 <NavLink class="nav-link" href="/clients" @onclick="CloseMobileNavAsync">
                     <span class="bi bi-person-bust-nav-menu nav-menu-icon" aria-hidden="true"></span>
                     <span class="nav-menu-text">@L["Nav_Clients"]</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/vehicles" @onclick="CloseMobileNavAsync">
+                    <span class="bi bi-car-side-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Vehicles"]</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/reminders" @onclick="CloseMobileNavAsync">
+                    <span class="bi bi-bell-nav-menu nav-menu-icon" aria-hidden="true"></span>
+                    <span class="nav-menu-text">@L["Nav_Reminders"]</span>
                 </NavLink>
             </div>
 

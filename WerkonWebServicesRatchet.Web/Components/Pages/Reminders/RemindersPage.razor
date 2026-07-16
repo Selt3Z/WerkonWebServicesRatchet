@@ -1,0 +1,170 @@
+@page "/reminders"
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject AppTimeZone AppTimeZone
+@inject AppPreferencesService AppPreferences
+
+<PageTitle>@L["Reminders_Title"]</PageTitle>
+
+<h1>@L["Reminders_Title"]</h1>
+
+<div class="list-filters clients-filters mb-3">
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="reminder-status">@L["Status"]</label>
+        <select id="reminder-status" class="form-select" @bind="StatusFilter" @bind:after="LoadAsync">
+            <option value="open">@L["Reminders_Filter_Open"]</option>
+            <option value="closed">@L["Reminders_Filter_Closed"]</option>
+            <option value="all">@L["Reminders_Filter_AllStatuses"]</option>
+        </select>
+    </div>
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="reminder-scope">@L["Reminders_Scope"]</label>
+        <select id="reminder-scope" class="form-select" @bind="ScopeFilter" @bind:after="LoadAsync">
+            <option value="all">@L["Reminders_Filter_AllDates"]</option>
+            <option value="overdue">@L["Reminders_Filter_Overdue"]</option>
+            <option value="today">@L["Reminders_Filter_Today"]</option>
+            <option value="upcoming">@L["Reminders_Filter_Upcoming"]</option>
+        </select>
+    </div>
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="reminder-q">@L["Search"]</label>
+        <input id="reminder-q" class="form-control" @bind="QueryFilter" />
+    </div>
+</div>
+
+<div class="action-bar mb-3">
+    <button class="btn btn-primary" @onclick="LoadAsync">@L["Search"]</button>
+    <button class="btn btn-secondary" @onclick="ClearFilters">@L["Clear"]</button>
+</div>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Reminders.Count == 0)
+{
+    <p>@L["Reminders_NotFound"]</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@L["Date"]</th>
+                <th>@L["Client"]</th>
+                <th>@L["Vehicle"]</th>
+                <th>@L["Reminder_Note"]</th>
+                <th>@L["Status"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var reminder in Reminders)
+            {
+                var overdue = IsOverdue(reminder);
+                <tr class="table-row-action @(overdue ? "reminder-row-overdue" : null)"
+                    @onclick="() => OpenReminder(reminder.Id)">
+                    <td>@AppTimeZone.FromUtc(reminder.ReminderAtUtc).ToString("yyyy-MM-dd")</td>
+                    <td>@reminder.ClientFullName</td>
+                    <td>@reminder.VehicleBrand @reminder.VehicleModel (@reminder.LicensePlate)</td>
+                    <td>@reminder.Note</td>
+                    <td>@(reminder.IsClosed ? L["Reminder_Closed"] : L["Reminder_Open"])</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <InfiniteScroll HasMore="HasMore" IsLoading="IsLoadingMore" OnLoadMore="LoadMoreAsync" />
+}
+
+@code {
+    private List<ReminderByDayItemModel> Reminders { get; set; } = [];
+    private string StatusFilter { get; set; } = "open";
+    private string ScopeFilter { get; set; } = "overdue";
+    private string? QueryFilter { get; set; }
+    private int PageSize => AppPreferences.ListPageSize;
+    private bool IsLoading { get; set; }
+    private bool IsLoadingMore { get; set; }
+    private bool HasMore { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            var page = await ApiClient.GetRemindersAsync(StatusFilter, ScopeFilter, QueryFilter, skip: 0, take: PageSize);
+            Reminders = page.Items;
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || !HasMore)
+        {
+            return;
+        }
+
+        try
+        {
+            IsLoadingMore = true;
+            var page = await ApiClient.GetRemindersAsync(
+                StatusFilter,
+                ScopeFilter,
+                QueryFilter,
+                skip: Reminders.Count,
+                take: PageSize);
+            Reminders.AddRange(page.Items);
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingMore = false;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        StatusFilter = "open";
+        ScopeFilter = "overdue";
+        QueryFilter = null;
+    }
+
+    private bool IsOverdue(ReminderByDayItemModel reminder)
+    {
+        if (reminder.IsClosed)
+        {
+            return false;
+        }
+
+        var todayStartUtc = AppTimeZone.ToUtcStartOfDay(AppTimeZone.GetToday());
+        return reminder.ReminderAtUtc < todayStartUtc;
+    }
+
+    private void OpenReminder(Guid id) => NavigationManager.NavigateTo($"/reminders/{id}");
+}

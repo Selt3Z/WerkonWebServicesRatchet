@@ -27,6 +27,9 @@ public sealed class AppTimeZone
     public DateTime ToUtc(DateTime localDateTime) =>
         TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localDateTime, DateTimeKind.Unspecified), _timeZone);
 
+    public DateTime ToUtcStartOfDay(DateOnly date) =>
+        ToUtc(date.ToDateTime(TimeOnly.MinValue));
+
     private static TimeZoneInfo ResolveTimeZone(string? configuredId, ILogger logger)
     {
         if (!string.IsNullOrWhiteSpace(configuredId)

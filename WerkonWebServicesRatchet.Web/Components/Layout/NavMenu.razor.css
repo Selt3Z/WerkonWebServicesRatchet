@@ -274,6 +274,14 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'/%3E%3C/svg%3E");
 }
 
+.bi-car-side-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 24 24'%3E%3Cpath d='M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z'/%3E%3C/svg%3E");
+}
+
+.bi-bell-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM8 1.918l-.797.161A4.002 4.002 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4.002 4.002 0 0 0-3.203-3.92L8 1.917zM14.22 12c.172.328.16.464.16.564 0 .172-.123.3-.28.3H1.9c-.157 0-.28-.128-.28-.3 0-.1-.012-.236.16-.564C2.892 10.165 3.5 7.847 3.5 6c0-2.15 1.426-3.956 3.4-4.55C7.28 1.25 7.62 1 8 1s.72.25 1.1.45C11.074 2.044 12.5 3.85 12.5 6c0 1.847.608 4.165 1.72 6z'/%3E%3C/svg%3E");
+}
+
 .bi-calendar3-nav-menu {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .385 1 .857v9.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857V3.857zM7 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'/%3E%3C/svg%3E");
 }
@@ -424,6 +432,8 @@
 
 :global([data-theme="gray-retro"]) .bi-house-door-fill-nav-menu,
 :global([data-theme="gray-retro"]) .bi-person-bust-nav-menu,
+:global([data-theme="gray-retro"]) .bi-car-side-nav-menu,
+:global([data-theme="gray-retro"]) .bi-bell-nav-menu,
 :global([data-theme="gray-retro"]) .bi-calendar3-nav-menu,
 :global([data-theme="gray-retro"]) .bi-wrench-nav-menu,
 :global([data-theme="gray-retro"]) .bi-users-nav-menu,

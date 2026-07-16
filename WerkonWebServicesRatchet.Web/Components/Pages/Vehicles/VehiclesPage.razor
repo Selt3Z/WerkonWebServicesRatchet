@@ -1,0 +1,174 @@
+@page "/vehicles"
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject AppPreferencesService AppPreferences
+
+<PageTitle>@L["Vehicles_Title"]</PageTitle>
+
+<h1>@L["Vehicles_Title"]</h1>
+
+<div class="list-filters clients-filters mb-3">
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="vehicle-vin-filter">@L["Vin"]</label>
+        <input id="vehicle-vin-filter" class="form-control" @bind="VinFilter" />
+    </div>
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="vehicle-plate-filter">@L["Plate"]</label>
+        <input id="vehicle-plate-filter" class="form-control" @bind="LicensePlateFilter" />
+    </div>
+    <div class="filter-field filter-field-inline">
+        <label class="form-label" for="vehicle-client-filter">@L["Client"]</label>
+        <input id="vehicle-client-filter" class="form-control" @bind="ClientNameFilter" />
+    </div>
+    <div class="filter-field filter-field-check">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="vehicles-include-archived"
+                   @bind="IncludeArchived" @bind:after="LoadVehiclesAsync" />
+            <label class="form-check-label" for="vehicles-include-archived">@L["Archive_ShowArchived"]</label>
+        </div>
+    </div>
+</div>
+
+<div class="action-bar mb-3">
+    <button class="btn btn-primary" @onclick="LoadVehiclesAsync">@L["Search"]</button>
+    <button class="btn btn-secondary" @onclick="ClearFilters">@L["Clear"]</button>
+</div>
+
+@if (IsLoading)
+{
+    <p>@L["Loading"]</p>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Vehicles.Count == 0)
+{
+    <p>@L["Vehicles_NotFound"]</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@L["Plate"]</th>
+                <th>@L["Vehicle"]</th>
+                <th>@L["Vin"]</th>
+                <th>@L["Client"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var vehicle in Vehicles)
+            {
+                <tr class="table-row-action" @onclick="() => OpenVehicle(vehicle.Id)">
+                    <td>
+                        @vehicle.LicensePlate
+                        @if (vehicle.IsArchived)
+                        {
+                            <span class="badge bg-secondary ms-1">@L["Archive_Badge"]</span>
+                        }
+                    </td>
+                    <td>@vehicle.Brand @vehicle.Model @(vehicle.Year.HasValue ? $"({vehicle.Year})" : null)</td>
+                    <td>@(vehicle.Vin ?? "—")</td>
+                    <td>@(vehicle.ClientFullName ?? "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <InfiniteScroll HasMore="HasMore" IsLoading="IsLoadingMore" OnLoadMore="LoadMoreAsync" />
+}
+
+@code {
+    private List<VehicleListItem> Vehicles { get; set; } = [];
+    private string? VinFilter { get; set; }
+    private string? LicensePlateFilter { get; set; }
+    private string? ClientNameFilter { get; set; }
+    private bool IncludeArchived { get; set; }
+    private int PageSize => AppPreferences.ListPageSize;
+    private bool IsLoading { get; set; }
+    private bool IsLoadingMore { get; set; }
+    private bool HasMore { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AppPreferences.EnsureLoadedAsync(ApiClient);
+        IncludeArchived = !AppPreferences.HideArchivedByDefault;
+        await LoadVehiclesAsync();
+    }
+
+    private async Task LoadVehiclesAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            var page = await ApiClient.GetVehiclesAsync(
+                VinFilter,
+                LicensePlateFilter,
+                ClientNameFilter,
+                IncludeArchived,
+                skip: 0,
+                take: PageSize);
+
+            Vehicles = page.Items;
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || !HasMore)
+        {
+            return;
+        }
+
+        try
+        {
+            IsLoadingMore = true;
+
+            var page = await ApiClient.GetVehiclesAsync(
+                VinFilter,
+                LicensePlateFilter,
+                ClientNameFilter,
+                IncludeArchived,
+                skip: Vehicles.Count,
+                take: PageSize);
+
+            Vehicles.AddRange(page.Items);
+            HasMore = page.HasMore;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingMore = false;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        VinFilter = null;
+        LicensePlateFilter = null;
+        ClientNameFilter = null;
+    }
+
+    private void OpenVehicle(Guid vehicleId)
+    {
+        NavigationManager.NavigateTo($"/vehicles/{vehicleId}");
+    }
+}

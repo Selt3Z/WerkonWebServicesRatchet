@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using WerkonWebServicesRatchet.Contracts.Clients;
+using WerkonWebServicesRatchet.Contracts.Common;
 using WerkonWebServicesRatchet.Contracts.Vehicles;
 using WerkonWebServicesRatchet.Contracts.Visits;
 using WerkonWebServicesRatchet.Domain.Entities;
@@ -23,39 +24,64 @@ public sealed class VehiclesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<VehicleResponse>>> Search(
-    [FromQuery] string? licensePlate,
-    [FromQuery] string? vin,
-    CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<VehicleResponse>>> Search(
+        [FromQuery] string? licensePlate,
+        [FromQuery] string? vin,
+        [FromQuery] string? clientName,
+        [FromQuery] bool includeArchived = false,
+        [FromQuery] int? skip = null,
+        [FromQuery] int? take = null,
+        CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Vehicles.AsQueryable();
+        var vehicles = includeArchived
+            ? _dbContext.Vehicles.IgnoreQueryFilters()
+            : _dbContext.Vehicles;
+        var clients = includeArchived
+            ? _dbContext.Clients.IgnoreQueryFilters()
+            : _dbContext.Clients;
+
+        var query =
+            from vehicle in vehicles
+            join client in clients on vehicle.ClientId equals client.Id
+            select new { vehicle, client };
 
         if (!string.IsNullOrWhiteSpace(licensePlate))
         {
             var normalizedLicensePlate = licensePlate.Trim().ToLower();
-            query = query.Where(x => x.LicensePlate.ToLower().Contains(normalizedLicensePlate));
+            query = query.Where(x => x.vehicle.LicensePlate.ToLower().Contains(normalizedLicensePlate));
         }
 
         if (!string.IsNullOrWhiteSpace(vin))
         {
             var normalizedVin = vin.Trim().ToLower();
-            query = query.Where(x => x.Vin != null && x.Vin.ToLower().Contains(normalizedVin));
+            query = query.Where(x => x.vehicle.Vin != null && x.vehicle.Vin.ToLower().Contains(normalizedVin));
         }
 
+        if (!string.IsNullOrWhiteSpace(clientName))
+        {
+            var normalizedClientName = clientName.Trim().ToLower();
+            query = query.Where(x => x.client.FullName.ToLower().Contains(normalizedClientName));
+        }
+
+        var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);
+
         var response = await query
-            .OrderBy(x => x.CreatedAtUtc)
+            .OrderByDescending(x => x.vehicle.CreatedAtUtc)
+            .ThenBy(x => x.vehicle.Id)
             .Select(x => new VehicleResponse
             {
-                Id = x.Id,
-                ClientId = x.ClientId,
-                Brand = x.Brand,
-                Model = x.Model,
-                Year = x.Year,
-                LicensePlate = x.LicensePlate,
-                Vin = x.Vin,
-                CreatedAtUtc = x.CreatedAtUtc
+                Id = x.vehicle.Id,
+                ClientId = x.vehicle.ClientId,
+                ClientFullName = x.client.FullName,
+                Brand = x.vehicle.Brand,
+                Model = x.vehicle.Model,
+                Year = x.vehicle.Year,
+                LicensePlate = x.vehicle.LicensePlate,
+                Vin = x.vehicle.Vin,
+                IsArchived = x.vehicle.IsArchived,
+                CreatedAtUtc = x.vehicle.CreatedAtUtc
             })
-            .ToListAsync(cancellationToken);
+            .ToPagedResponseAsync(normalizedSkip, normalizedTake, cancellationToken);
 
         return Ok(response);
     }

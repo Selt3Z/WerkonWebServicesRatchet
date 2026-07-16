@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using WerkonWebServicesRatchet.Contracts.Common;
 using WerkonWebServicesRatchet.Contracts.Reminders;
 using WerkonWebServicesRatchet.Domain.Entities;
 using WerkonWebServicesRatchet.Infrastructure.Identity;
@@ -21,6 +22,77 @@ public sealed class RemindersController : ControllerBase
     {
         _dbContext = dbContext;
         _appTimeZone = appTimeZone;
+    }
+
+    /// <summary>
+    /// status: open | closed | all
+    /// scope: overdue | today | upcoming | all
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<PagedResponse<ReminderByDayItemResponse>>> GetAll(
+        [FromQuery] string? status = "open",
+        [FromQuery] string? scope = "all",
+        [FromQuery] string? q = null,
+        [FromQuery] int? skip = null,
+        [FromQuery] int? take = null,
+        CancellationToken cancellationToken = default)
+    {
+        var today = _appTimeZone.GetToday();
+        var (todayStartUtc, todayEndUtc) = _appTimeZone.GetDayRangeUtc(today);
+
+        var query = _dbContext.Reminders.AsQueryable();
+
+        var normalizedStatus = (status ?? "open").Trim().ToLowerInvariant();
+        query = normalizedStatus switch
+        {
+            "closed" => query.Where(x => x.IsClosed),
+            "all" => query,
+            _ => query.Where(x => !x.IsClosed)
+        };
+
+        var normalizedScope = (scope ?? "all").Trim().ToLowerInvariant();
+        query = normalizedScope switch
+        {
+            "overdue" => query.Where(x => !x.IsClosed && x.ReminderAtUtc < todayStartUtc),
+            "today" => query.Where(x => x.ReminderAtUtc >= todayStartUtc && x.ReminderAtUtc < todayEndUtc),
+            "upcoming" => query.Where(x => x.ReminderAtUtc >= todayEndUtc),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim().ToLower();
+            query = query.Where(x =>
+                x.Note.ToLower().Contains(term)
+                || x.Vehicle.LicensePlate.ToLower().Contains(term)
+                || x.Vehicle.Client.FullName.ToLower().Contains(term)
+                || x.Vehicle.Client.PhoneNumber.ToLower().Contains(term)
+                || (x.Vehicle.Vin != null && x.Vehicle.Vin.ToLower().Contains(term)));
+        }
+
+        var (normalizedSkip, normalizedTake) = QueryPagingExtensions.NormalizePaging(skip, take);
+
+        var projected = query.Select(x => new ReminderByDayItemResponse
+        {
+            Id = x.Id,
+            VehicleId = x.VehicleId,
+            ClientId = x.Vehicle.ClientId,
+            ReminderAtUtc = x.ReminderAtUtc,
+            Note = x.Note,
+            IsClosed = x.IsClosed,
+            ClientFullName = x.Vehicle.Client.FullName,
+            ClientPhoneNumber = x.Vehicle.Client.PhoneNumber,
+            VehicleBrand = x.Vehicle.Brand,
+            VehicleModel = x.Vehicle.Model,
+            LicensePlate = x.Vehicle.LicensePlate
+        });
+
+        var ordered = normalizedScope == "overdue"
+            ? projected.OrderBy(x => x.ReminderAtUtc).ThenBy(x => x.Id)
+            : projected.OrderByDescending(x => x.ReminderAtUtc).ThenBy(x => x.Id);
+
+        var response = await ordered.ToPagedResponseAsync(normalizedSkip, normalizedTake, cancellationToken);
+        return Ok(response);
     }
 
     [HttpGet("by-day")]

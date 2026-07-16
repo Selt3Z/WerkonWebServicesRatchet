@@ -1,0 +1,156 @@
+@using WerkonWebServicesRatchet.Web.Models
+@using WerkonWebServicesRatchet.Web.Services
+@inject RatchetApiClient ApiClient
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<div class="global-search" @onfocusin="OpenPanel" @onfocusout="OnFocusOut">
+    <input class="global-search-input"
+           type="search"
+           autocomplete="off"
+           placeholder="@L["GlobalSearch_Placeholder"]"
+           value="@Query"
+           @oninput="OnInputAsync"
+           @onkeydown="OnKeyDown" />
+
+    @if (ShowPanel)
+    {
+        <div class="global-search-panel">
+            @if (IsSearching)
+            {
+                <div class="global-search-empty">@L["Loading"]</div>
+            }
+            else if (!HasResults)
+            {
+                <div class="global-search-empty">@L["GlobalSearch_Empty"]</div>
+            }
+            else
+            {
+                @if (Result.Clients.Count > 0)
+                {
+                    <div class="global-search-group">@L["Clients_Title"]</div>
+                    @foreach (var hit in Result.Clients)
+                    {
+                        <button type="button" class="global-search-item" @mousedown:preventDefault @onclick="() => OpenHit(hit)">
+                            <span class="global-search-item-title">@hit.Title</span>
+                            <span class="global-search-item-sub">@hit.Subtitle</span>
+                        </button>
+                    }
+                }
+
+                @if (Result.Vehicles.Count > 0)
+                {
+                    <div class="global-search-group">@L["Vehicles_Title"]</div>
+                    @foreach (var hit in Result.Vehicles)
+                    {
+                        <button type="button" class="global-search-item" @mousedown:preventDefault @onclick="() => OpenHit(hit)">
+                            <span class="global-search-item-title">@hit.Title</span>
+                            <span class="global-search-item-sub">@hit.Subtitle</span>
+                        </button>
+                    }
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string Query { get; set; } = string.Empty;
+    private GlobalSearchResult Result { get; set; } = new();
+    private bool IsSearching { get; set; }
+    private bool ShowPanel { get; set; }
+    private CancellationTokenSource? _debounceCts;
+
+    private bool HasResults => Result.Clients.Count > 0 || Result.Vehicles.Count > 0;
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        Query = e.Value?.ToString() ?? string.Empty;
+        ShowPanel = Query.Trim().Length >= 2;
+
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        try
+        {
+            await Task.Delay(220, token);
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (Query.Trim().Length < 2)
+            {
+                Result = new GlobalSearchResult();
+                IsSearching = false;
+                return;
+            }
+
+            IsSearching = true;
+            await InvokeAsync(StateHasChanged);
+            Result = await ApiClient.GlobalSearchAsync(Query, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        catch
+        {
+            Result = new GlobalSearchResult();
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                IsSearching = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private void OpenPanel()
+    {
+        if (Query.Trim().Length >= 2)
+        {
+            ShowPanel = true;
+        }
+    }
+
+    private async Task OnFocusOut(FocusEventArgs _)
+    {
+        await Task.Delay(120);
+        ShowPanel = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            ShowPanel = false;
+        }
+    }
+
+    private void OpenHit(GlobalSearchHitModel hit)
+    {
+        ShowPanel = false;
+        Query = string.Empty;
+        Result = new GlobalSearchResult();
+
+        if (string.Equals(hit.Kind, "vehicle", StringComparison.OrdinalIgnoreCase))
+        {
+            NavigationManager.NavigateTo($"/vehicles/{hit.Id}");
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/clients/{hit.Id}");
+    }
+
+    public void Dispose()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+    }
+}

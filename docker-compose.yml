@@ -36,6 +36,9 @@ services:
       Seed__AdminDisplayName: ${Seed__AdminDisplayName:-Administrator}
       AppTimeZone: ${AppTimeZone:-Europe/Moscow}
       Backup__StatusFilePath: /backups/status.json
+      Backup__BackupsDirectory: /backups
+      System__PublicHostname: ${APP_HOSTNAME:-ratchet.local}
+      System__AdvertiseAddresses: ${LAN_ADDRESSES:-}
     volumes:
       - ./backups:/backups:ro
     depends_on:
