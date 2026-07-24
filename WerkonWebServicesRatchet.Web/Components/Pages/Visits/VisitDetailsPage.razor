@@ -81,7 +81,7 @@ else
                         <label class="form-label">@L["Visit_AssignedMechanic"]</label>
                         <select class="form-select"
                                 value="@FormatMechanicOptionValue(SelectedMechanicUserId)"
-                                @onchange="OnMechanicSelectionChanged">
+                                @onchange="OnMechanicSelectionChangedAsync">
                             <option value="">@L["Visit_AssignedMechanic_None"]</option>
                             @foreach (var mechanic in Mechanics)
                             {
@@ -94,6 +94,12 @@ else
                             @onclick="AssignMechanicAsync">
                         @(IsAssigningMechanic ? L["Visit_AssigningMechanic"] : L["Visit_AssignMechanic"])
                     </button>
+                    @if (HasMechanicSlotConflict)
+                    {
+                        <span class="mechanic-slot-conflict-badge"
+                              title="@L["Visit_MechanicSlotConflict"]"
+                              aria-label="@L["Visit_MechanicSlotConflict"]">!</span>
+                    }
                 </div>
             }
 
@@ -329,6 +335,7 @@ else
     private bool IsClosingVisit { get; set; }
     private bool IsGeneratingWorkOrder { get; set; }
     private bool IsAssigningMechanic { get; set; }
+    private bool HasMechanicSlotConflict { get; set; }
     private bool IsArchiving { get; set; }
     private string? ErrorMessage { get; set; }
     private string? ServiceItemErrorMessage { get; set; }
@@ -373,13 +380,33 @@ else
     private static string FormatMechanicOptionValue(Guid? mechanicUserId) =>
         mechanicUserId?.ToString() ?? string.Empty;
 
-    private void OnMechanicSelectionChanged(ChangeEventArgs e)
+    private async Task OnMechanicSelectionChangedAsync(ChangeEventArgs e)
     {
         var value = e.Value?.ToString();
 
         SelectedMechanicUserId = string.IsNullOrWhiteSpace(value)
             ? null
             : Guid.Parse(value);
+
+        await RefreshMechanicSlotConflictAsync();
+    }
+
+    private async Task RefreshMechanicSlotConflictAsync()
+    {
+        if (Visit is null || !SelectedMechanicUserId.HasValue)
+        {
+            HasMechanicSlotConflict = false;
+            return;
+        }
+
+        try
+        {
+            HasMechanicSlotConflict = await ApiClient.HasMechanicSlotConflictAsync(Id, SelectedMechanicUserId);
+        }
+        catch
+        {
+            HasMechanicSlotConflict = false;
+        }
     }
 
     private async Task AssignMechanicAsync()
@@ -399,6 +426,7 @@ else
 
             Visit = updated;
             SelectedMechanicUserId = Visit.AssignedMechanicUserId;
+            await RefreshMechanicSlotConflictAsync();
         }
         catch (Exception ex)
         {
@@ -478,6 +506,15 @@ else
 
             Visit = await ApiClient.GetVisitDetailsAsync(Id);
             SelectedMechanicUserId = Visit?.AssignedMechanicUserId;
+
+            if (CanAssignMechanic)
+            {
+                await RefreshMechanicSlotConflictAsync();
+            }
+            else
+            {
+                HasMechanicSlotConflict = false;
+            }
         }
         catch (Exception ex)
         {

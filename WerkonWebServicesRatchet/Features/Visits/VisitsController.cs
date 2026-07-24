@@ -227,6 +227,41 @@ public sealed class VisitsController : ControllerBase
         return Ok(await MapVisitDetailsResponseAsync(visit, cancellationToken));
     }
 
+    [HttpGet("{id:guid}/mechanic-slot-conflict")]
+    [Authorize(Policy = AuthorizationPolicies.AssignVisitMechanic)]
+    public async Task<ActionResult<MechanicSlotConflictResponse>> GetMechanicSlotConflict(
+        Guid id,
+        [FromQuery] Guid? mechanicUserId,
+        CancellationToken cancellationToken)
+    {
+        if (!mechanicUserId.HasValue)
+        {
+            return Ok(new MechanicSlotConflictResponse { HasConflict = false });
+        }
+
+        var visit = await _dbContext.Visits
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (visit is null)
+        {
+            return NotFound();
+        }
+
+        var (slotStartUtc, slotEndUtc) = GetMinuteSlotUtc(visit.VisitedAtUtc);
+
+        var hasConflict = await _dbContext.Visits
+            .AnyAsync(
+                x => x.Id != id
+                    && x.AssignedMechanicUserId == mechanicUserId.Value
+                    && x.Status != VisitStatus.Canceled
+                    && x.VisitedAtUtc >= slotStartUtc
+                    && x.VisitedAtUtc < slotEndUtc,
+                cancellationToken);
+
+        return Ok(new MechanicSlotConflictResponse { HasConflict = hasConflict });
+    }
+
     [HttpGet("{id:guid}/details")]
     public async Task<ActionResult<VisitDetailsResponse>> GetDetails(
     Guid id,
@@ -539,4 +574,12 @@ public sealed class VisitsController : ControllerBase
             join role in _dbContext.Roles on userRole.RoleId equals role.Id
             where userRole.UserId == userId && role.Name == AppRoles.Mechanic
             select userRole.UserId).AnyAsync(cancellationToken);
+
+    private (DateTime SlotStartUtc, DateTime SlotEndUtc) GetMinuteSlotUtc(DateTime visitedAtUtc)
+    {
+        var local = _appTimeZone.FromUtc(visitedAtUtc);
+        var slotStartLocal = new DateTime(local.Year, local.Month, local.Day, local.Hour, local.Minute, 0, DateTimeKind.Unspecified);
+        var slotStartUtc = _appTimeZone.ToUtc(slotStartLocal);
+        return (slotStartUtc, slotStartUtc.AddMinutes(1));
+    }
 }

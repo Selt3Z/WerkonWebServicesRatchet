@@ -474,6 +474,33 @@ public sealed class RatchetApiClient
         return await response.Content.ReadFromJsonAsync<VisitDetailsModel>(cancellationToken);
     }
 
+    public async Task<bool> HasMechanicSlotConflictAsync(
+        Guid visitId,
+        Guid? mechanicUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!mechanicUserId.HasValue)
+        {
+            return false;
+        }
+
+        var url = $"api/visits/{visitId}/mechanic-slot-conflict?mechanicUserId={mechanicUserId.Value}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+
+        if (IsUnauthorized(response) || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            return false;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<MechanicSlotConflictModel>(cancellationToken);
+        return payload?.HasConflict == true;
+    }
+
     public async Task<VisitListItem?> CloseVisitAsync(
         Guid visitId,
         CancellationToken cancellationToken = default)
